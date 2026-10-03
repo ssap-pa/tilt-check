@@ -271,3 +271,16 @@ def test_audit_report_runs_without_bars(tmp_path):
     assert "3 over 1 trading days" in md
     assert "needs 1-minute bars" in md          # no bars -> the replay and the rules say so
     assert " her " not in md and "she " not in md  # written to the trader, not about her
+
+
+def test_load_bars_reads_multi_contract_csv(tmp_path):
+    from tiltcheck.bars import load_bars
+    p = tmp_path / "bars.csv"
+    p.write_text("﻿instrument,bar_end_utc,bar_end_kst,open,high,low,close,volume\n"
+                 "MNQ DEC26,2026-09-10T00:01:00.000Z,2026-09-10T09:01:00.000+09:00,1,2,0.5,1.5,10\n"
+                 "MNQ DEC26,2026-09-10T00:02:00.000Z,2026-09-10T09:02:00.000+09:00,1.5,2.5,1,2,11\n"
+                 "MES SEP26,2026-09-10T00:01:00.000Z,2026-09-10T09:01:00.000+09:00,5,6,4,5.5,3\n", encoding="utf-8")
+    b = load_bars([p])
+    assert set(b) == {"MNQ 12-26", "MES 09-26"}          # same keys as the .txt exports
+    assert b["MNQ 12-26"].index[0] == pd.Timestamp("2026-09-10 00:01:00")   # UTC, naive; align() finds the offset
+    assert list(b["MNQ 12-26"].columns) == ["open", "high", "low", "close", "volume"]

@@ -29,18 +29,38 @@ def contract_key(name: str) -> str:
     return f"{m.group(1)} {m.group(2)}-{m.group(3)}" if m else name
 
 
+def _read_csv_bars(f: Path) -> dict[str, pd.DataFrame]:
+    """One CSV for many contracts: instrument,bar_end_utc,...,open,high,low,close,volume.
+    Times are kept in UTC (naive); `align` finds the offset to her PC clock."""
+    df = pd.read_csv(f, encoding="utf-8-sig")
+    tcol = next(c for c in df.columns if c.startswith("bar_end") or c.lower() in ("time", "timestamp"))
+    df["time"] = pd.to_datetime(df[tcol], utc=True).dt.tz_localize(None)
+    out = {}
+    for inst, g in df.groupby("instrument"):
+        out[contract_key(inst)] = g[["time", "open", "high", "low", "close", "volume"]].set_index("time")
+    return out
+
+
 def load_bars(paths) -> dict[str, pd.DataFrame]:
-    """{contract: bars indexed by close time}. `paths` can mix files and folders."""
+    """{contract: bars indexed by close time}. `paths` can mix files and folders.
+    NinjaTrader exports are one .txt per contract; a .csv with an `instrument` column holds many."""
     files = []
     for p in map(Path, paths):
-        files += sorted(p.glob("*.txt")) if p.is_dir() else [p]
+        files += sorted(list(p.glob("*.txt")) + list(p.glob("*.csv"))) if p.is_dir() else [p]
     out = {}
+
+    def add(key, frame):
+        out[key] = pd.concat([out[key], frame]) if key in out else frame
+
     for f in files:
+        if f.suffix.lower() == ".csv":
+            for key, frame in _read_csv_bars(f).items():
+                add(key, frame)
+            continue
         df = pd.read_csv(f, sep=";", header=None, names=["time", "open", "high", "low", "close", "volume"],
                          dtype={"time": str})
         df["time"] = pd.to_datetime(df["time"], format="%Y%m%d %H%M%S")
-        key = contract_key(f.name.split(".")[0])
-        out[key] = pd.concat([out[key], df.set_index("time")]) if key in out else df.set_index("time")
+        add(contract_key(f.name.split(".")[0]), df.set_index("time"))
     return {k: v[~v.index.duplicated()].sort_index() for k, v in out.items()}
 
 
