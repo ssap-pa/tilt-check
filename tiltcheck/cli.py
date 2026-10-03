@@ -94,7 +94,7 @@ def cmd_check(args):
 
 
 def cmd_exits(args):
-    from .bars import align, load_bars
+    from .bars import align, inside, load_bars
     from .exits import how_she_exits, replay
     t = _history(args)
     print("How you exit now (trades closed in one piece), points per contract and minutes held:")
@@ -104,20 +104,23 @@ def cmd_exits(args):
               "(Control Center > New > Historical Data > Export, Minute) and pass them with --bars.")
         return
     bars = load_bars(args.bars)
-    offset, share = align(t, bars)
-    print(f"Bars line up with your fills when shifted by {offset} ({share:.0%} of entries sit inside their bar).")
-    if share < 0.8:
-        print("That's too few to trust. Check that the bar files are the same contracts and dates as the trades.")
+    offset, _ = align(t, bars)
+    ok = inside(t, bars, offset)
+    print(f"Bars line up with your fills when shifted by {offset}: {int(ok.sum())} of {len(t)} entries sit inside "
+          f"the bar they were filled in. Only those are replayed.")
+    if ok.sum() < 20:
+        print("That's too few. Check that the bar files are the same contracts and dates as the trades.")
         return
-    r = replay(t, bars, offset, horizon=args.horizon)
-    mt, ms = r.best
-    sizes = ", ".join(f"{k} +{a:g}/-{b:g}" for k, (a, b) in r.sizes.items())
-    print(f"Replayed {r.covered} of {r.total} entries on the bars that followed them (max {args.horizon} min each).")
-    print(f"Net $ for each bracket on your older {r.train} trades (rows: target, columns: stop, "
-          f"in multiples of your usual move):\n{r.in_sample.to_string()}\n")
-    print(f"Best on the older trades: target {mt:g}x / stop {ms:g}x your usual move ({sizes} points).")
-    print(f"On your newer {r.test} trades, which it didn't see: that bracket ${r.bracket_test:,.2f}, "
-          f"your own exits ${r.actual_test:,.2f}.")
+    for ties in ("stop", "target"):
+        r = replay(t, bars, offset, horizon=args.horizon, ties=ties)
+        mt, ms = r.best
+        sizes = ", ".join(f"{k} +{a:g}/-{b:g}" for k, (a, b) in r.sizes.items())
+        print(f"\nIf a bar touched both levels, count it as the {ties}:")
+        print(f"Net $ on your older {r.train} trades (rows: target, columns: stop, in multiples of your usual move); "
+              f"your own exits made ${r.actual_train:,.2f} on them:\n{r.in_sample.to_string()}")
+        print(f"Best there: target {mt:g}x / stop {ms:g}x ({sizes} points).")
+        print(f"On your newer {r.test} trades, which it didn't see: that bracket ${r.bracket_test:,.2f}, "
+              f"your own exits ${r.actual_test:,.2f}.")
 
 
 def cmd_learn(args):

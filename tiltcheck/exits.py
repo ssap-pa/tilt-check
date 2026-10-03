@@ -6,7 +6,8 @@ the minute bars that followed it. A bracket is +target / -stop in points from
 her fill price, and every rule leans conservative:
 
 - only bars that start after the entry minute are used (the rest of that minute is unknown);
-- a bar that touches both the stop and the target counts as the stop;
+- a bar that touches both the stop and the target can't say which came first, so every
+  result is worked out twice: once counting it as the stop, once as the target;
 - a trade that hits neither within `horizon` minutes closes at that bar's close.
 
 Brackets are picked on her older 70% of trades and scored on the newer 30%, so
@@ -19,7 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from .bars import contract_key
+from .bars import contract_key, inside
 
 TICK = {"MNQ": 0.25, "NQ": 0.25, "MES": 0.25, "ES": 0.25, "M2K": 0.1, "RTY": 0.1, "MYM": 1.0, "YM": 1.0,
         "MGC": 0.1, "GC": 0.1, "MCL": 0.01, "CL": 0.01}
@@ -70,11 +71,13 @@ class Path_:
 
 
 def paths(trades: pd.DataFrame, bars: dict, offset: pd.Timedelta, horizon: int = 120) -> dict[int, Path_]:
-    """Price path after each entry, from the first full bar after the entry minute."""
+    """Price path after each entry, from the first full bar after the entry minute.
+    Trades whose fill doesn't sit inside its bar (wrong contract, missing data) are left out."""
     out = {}
+    ok = inside(trades, bars, offset)
     for i, r in trades.iterrows():
         b = bars.get(contract_key(r["contract"]))
-        if b is None:
+        if b is None or not ok[i]:
             continue
         start = r["entry_time"].floor("min") + pd.Timedelta(minutes=2)    # close of the first full bar
         w = b.loc[start - offset: start - offset + pd.Timedelta(minutes=horizon - 1)]
@@ -88,17 +91,18 @@ def paths(trades: pd.DataFrame, bars: dict, offset: pd.Timedelta, horizon: int =
     return out
 
 
-def bracket(p: Path_, target: float, stop: float) -> float:
-    """Points per contract this bracket would have closed at."""
+def bracket(p: Path_, target: float, stop: float, ties: str = "stop") -> float:
+    """Points per contract this bracket would have closed at. `ties`: what a bar that
+    touched both levels counts as ("stop" or "target")."""
     hit_t = np.flatnonzero(p.fav >= target)
     hit_s = np.flatnonzero(p.adv >= stop)
     t = hit_t[0] if len(hit_t) else np.inf
     s = hit_s[0] if len(hit_s) else np.inf
-    if s <= t and np.isfinite(s):
+    if np.isinf(t) and np.isinf(s):
+        return float(p.close[-1])
+    if s < t or (s == t and ties == "stop"):
         return -stop
-    if np.isfinite(t):
-        return target
-    return float(p.close[-1])
+    return target
 
 
 @dataclass
@@ -109,6 +113,7 @@ class Replay:
     train: int
     test: int
     best: tuple[float, float]    # (target mult, stop mult) picked on the older trades
+    actual_train: float          # her real net on the older trades
     actual_test: float           # her real net on the newer trades
     bracket_test: float          # the picked bracket's net on the same trades
     in_sample: pd.DataFrame      # net $ for every bracket on the older trades (rows target, cols stop)
@@ -116,7 +121,7 @@ class Replay:
 
 
 def replay(trades: pd.DataFrame, bars: dict, offset: pd.Timedelta, horizon: int = 120,
-           train_share: float = 0.7) -> Replay:
+           train_share: float = 0.7, ties: str = "stop") -> Replay:
     t = trades.sort_values("entry_time").reset_index(drop=True)
     pv, unit = point_values(t), usual_move(t)
     ps = paths(t, bars, offset, horizon)
@@ -129,7 +134,8 @@ def replay(trades: pd.DataFrame, bars: dict, offset: pd.Timedelta, horizon: int 
         for i in ids:
             r = t.loc[i]
             tick = TICK.get(r["instrument"], 0.01)
-            pts = bracket(ps[i], _round(mt * unit[r["instrument"]], tick), _round(ms * unit[r["instrument"]], tick))
+            pts = bracket(ps[i], _round(mt * unit[r["instrument"]], tick), _round(ms * unit[r["instrument"]], tick),
+                          ties)
             total += pts * pv[r["instrument"]] * r["qty"] - r["commission"]
         return total
 
@@ -138,7 +144,8 @@ def replay(trades: pd.DataFrame, bars: dict, offset: pd.Timedelta, horizon: int 
     sizes = {k: (_round(mt * unit[k], TICK.get(k, 0.01)), _round(ms * unit[k], TICK.get(k, 0.01)))
              for k in sorted({t.loc[i, "instrument"] for i in idx})}
     return Replay(covered=len(idx), total=len(t), offset=offset, train=len(train), test=len(test),
-                  best=(mt, ms), actual_test=round(float(t.loc[test, "profit"].sum()), 2),
+                  best=(mt, ms), actual_train=round(float(t.loc[train, "profit"].sum()), 2),
+                  actual_test=round(float(t.loc[test, "profit"].sum()), 2),
                   bracket_test=round(net(test, mt, ms), 2), in_sample=table, sizes=sizes)
 
 

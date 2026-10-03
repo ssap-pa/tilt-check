@@ -66,11 +66,19 @@ Every check is logged with her decision and reason. `learn` imports the next exp
 
 `exits` looks at how she closes trades. Part of that is already in the export. On MNQ her winners close at a median **+7.88 points after 4.7 minutes**, and her losers at **-11.75 points after 7.4 minutes**. She takes profits faster than she takes losses.
 
-The other part is "where should a trade like this be closed", and that needs to know where price went while she was in it. Her prop-account export can't say: NinjaTrader's MAE and MFE columns there just repeat the final P&L (on 99.7% of rows). So `exits --bars` takes minute bars exported from NinjaTrader (Control Center > New > Historical Data > Export, Minute) and replays every entry with fixed brackets: a target and a stop, in multiples of her usual move. It works out the bars' clock from her fills, picks the best bracket on her older 70% of trades, then scores it on the newer 30% against what her own exits made. The rules lean pessimistic: a bar that touches both the stop and the target counts as the stop.
+The other part is "where should a trade like this be closed", and that needs to know where price went while she was in it. Her prop-account export can't say: NinjaTrader's MAE and MFE columns there just repeat the final P&L (on 99.7% of rows). So `exits --bars` takes minute bars exported from NinjaTrader (Control Center > New > Historical Data > Export, Minute) and replays every entry with fixed brackets: a target and a stop, in multiples of her usual move. It works out the bars' clock from her fills, picks the best bracket on her older 70% of trades, then scores it on the newer 30% against what her own exits made. When a single bar touches both the stop and the target, the order is unknown, so every result is computed both ways.
 
 ```bash
 python -m tiltcheck exits --csv trades.csv --bars "MNQ 09-26.Last.txt" "MNQ 12-26.Last.txt"
 ```
+
+On her account, with public 1-minute futures bars (Yahoo Finance) until her own NinjaTrader export comes in: the bars start September 3, so 233 of her 293 entries are covered, and every one of those fills sits inside the bar it happened in.
+
+- Picked on her older 163 trades, the best bracket was the widest one tried: target and stop at 3x her usual move (MNQ +26.25/-26.25). On those same trades it made $985.27 to her $645.27. That's what fitting does.
+- On her newer 70 trades, which it hadn't seen, it **lost $75.54. Her own exits made +$176.46.** Same answer whichever way the both-levels-in-one-bar case is counted.
+- A stop at half her usual move (4.5 points on MNQ) lost money with every target. In the 30 minutes after an MNQ entry, price typically went 18.75 points her way and 23.25 against (medians), so that stop sits well inside the normal swing.
+
+So the check doesn't print a take-profit number. The replay is there to look at.
 
 ## Install
 

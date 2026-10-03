@@ -72,3 +72,11 @@ def align(trades: pd.DataFrame, bars: dict) -> tuple[pd.Timedelta, float]:
         if inside > best[1]:
             best = (off, float(inside))
     return best
+
+
+def inside(trades: pd.DataFrame, bars: dict, offset: pd.Timedelta, slack: float = 0.25) -> pd.Series:
+    """True for trades whose fill price sits inside the bar they were filled in: the bars
+    are the right contract and clock for that trade. Only those get replayed."""
+    m = _fill_bars(trades, bars, offset)
+    ok = (m["entry_price"] >= m["low"] - slack) & (m["entry_price"] <= m["high"] + slack)
+    return pd.Series(ok.to_numpy(), index=m["index"]).reindex(trades.index, fill_value=False)
