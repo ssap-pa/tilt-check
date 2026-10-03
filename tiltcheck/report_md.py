@@ -252,7 +252,7 @@ def write_report(trades: pd.DataFrame, bars: dict | None = None, offset=None, pa
     med = {res: ex.loc[(top, res)] for res in ("win", "loss") if (top, res) in ex.index}
     after, qnet, snet = _after_loss(t, pause)
     L = [f"# Your Trading History, Audited", "",
-         f"## {first:%B %d} to {last:%B %d, %Y}" + (f" — prepared for {who}" if who != "you" else ""), "",
+         f"## {first:%B %d} to {last:%B %d, %Y}" + (f", prepared for {who}" if who != "you" else ""), "",
          "What this is: a description of what you did, in your own numbers, from your fills. "
          "What it is not: trading advice, a signal, or a prediction. Where the data can't tell, it says so.", "",
          "## 1. The period on one page", "",

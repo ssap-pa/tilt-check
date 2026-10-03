@@ -203,6 +203,10 @@ def cmd_learn(args):
 
 
 def main(argv=None):
+    # Windows consoles default to a legacy code page; the reports use ± and curly quotes.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(prog="tiltcheck")
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("report", "check", "learn", "exits", "watch", "audit", "audit-report", "three-numbers"):
