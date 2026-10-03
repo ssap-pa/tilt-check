@@ -57,6 +57,20 @@ def audit(trades: pd.DataFrame, f: pd.DataFrame, min_n: int = 20) -> pd.DataFram
     return pd.DataFrame(rows)
 
 
+def vwap_bands(trades: pd.DataFrame, ind: pd.DataFrame) -> pd.DataFrame:
+    """Results by distance from VWAP in standard deviations, signed by the trade: 'chase' is
+    entering in the direction price has already stretched, 'fade' is entering against it."""
+    t = trades.join(ind, how="inner")
+    d = np.where(t["side"] == "long", 1.0, -1.0)
+    z = (t["entry_price"] - t["vwap"]) / t["vwap_sd"] * d
+    labels = ["fade >4sd", "fade 3-4", "fade 2-3", "fade 1-2", "fade 0-1",
+              "chase 0-1", "chase 1-2", "chase 2-3", "chase 3-4", "chase >4sd"]
+    band = pd.cut(z, [-np.inf, -4, -3, -2, -1, 0, 1, 2, 3, 4, np.inf], labels=labels)
+    return t.groupby(band, observed=True).agg(
+        trades=("profit", "size"), win_rate=("profit", lambda s: round(float((s > 0).mean()), 3)),
+        net=("profit", "sum")).round(2)
+
+
 def winners_in_ticks(trades: pd.DataFrame, tick: dict, target_ticks: int = 200) -> pd.DataFrame:
     """How her winners compare with a target written in ticks (e.g. 'take 200+ tick moves')."""
     t = trades[(trades["profit"] > 0) & (trades.get("rows", 1) == 1)].copy()

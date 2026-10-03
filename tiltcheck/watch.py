@@ -42,9 +42,17 @@ DEFAULT_RULES = {
     "pause_after_loss_minutes": None,  # no new entry this soon after a losing exit
     "daily_loss_limit_pct": None,    # % of the account's cash value at the start of the day
     "risk_per_trade_pct": None,      # stop distance x size, as % of the account (needs the add-on's orders.csv)
+    # Prop accounts: limits as % of the drawdown allowance instead of the balance (e.g. $2,500 on a 50K)
+    "drawdown_usd": None,
+    "daily_loss_limit_pct_of_drawdown": None,
+    "risk_per_trade_pct_of_drawdown": None,
+    "a_plus_checklist": [],          # shown on entries after the daily limit: only these setups
     "stop_grace_seconds": 20,        # how long after an entry the stop has to show up
-    "warn_adding_to_loser": True,    # adding to a position that's under water
+    "stop_check_from_trade": 1,      # e.g. 6: her first 5 entries are test trades without stops
+    "warn_adding_to_loser": True,    # adding to a position that's under water...
+    "adding_to_loser_min_pts": None,  # ...by more than this many points (default: her usual loss for that setup)
     "size_alert_multiple": 3,        # an entry this many times her usual size
+    "weak_sessions": [],             # heads-up with her own numbers for that session, e.g. ["NY overnight"]
     "avoid_sessions": [],            # e.g. ["NY overnight"]
     "mute": [],                      # history groups she already knows about, e.g. ["first 5 trades"]
     "red_zone_gap": 0.08,            # a group this far below her usual win rate...
@@ -187,10 +195,27 @@ class Watcher:
         return max(done, key=lambda t: t["exit_time"]) if done else None
 
     def _day_limit(self, account: str, when: pd.Timestamp):
-        """Daily loss limit in $ from the rule's % and the day's first cash value, if both are known."""
-        pct = self.rules.get("daily_loss_limit_pct")
+        """Daily loss limit in $: % of the drawdown allowance if set, else % of the day's first cash value."""
+        r = self.rules
+        if r.get("daily_loss_limit_pct_of_drawdown") and r.get("drawdown_usd"):
+            return r["daily_loss_limit_pct_of_drawdown"] / 100 * r["drawdown_usd"]
+        pct = r.get("daily_loss_limit_pct")
         start = self.day_cash.get((account, when.date()))
         return pct / 100 * start if pct and start else None
+
+    def _risk_limit(self, account: str):
+        """Max $ at risk per entry: % of the drawdown allowance if set, else % of the cash value."""
+        r = self.rules
+        if r.get("risk_per_trade_pct_of_drawdown") and r.get("drawdown_usd"):
+            return r["risk_per_trade_pct_of_drawdown"] / 100 * r["drawdown_usd"]
+        cash = self.cash.get(account)
+        return r["risk_per_trade_pct"] / 100 * cash if r.get("risk_per_trade_pct") and cash else None
+
+    def _limit_label(self, kind: str) -> str:
+        r = self.rules
+        if r.get(f"{kind}_pct_of_drawdown") and r.get("drawdown_usd"):
+            return f"{r[f'{kind}_pct_of_drawdown']:g}% of your ${r['drawdown_usd']:,.0f} drawdown"
+        return f"{r.get(f'{kind}_pct') or 0:g}% of the account"
 
     # ---- events ------------------------------------------------------------------------------
     def on_fill(self, when: pd.Timestamp, account: str, contract: str, signed_qty: int, price: float, quiet=False):
@@ -202,8 +227,11 @@ class Watcher:
             self.open[key] = pos
             if not quiet:
                 self._entry(pos)
-                if self.rules.get("risk_per_trade_pct") and self.orders_seen:
-                    self.pending.append((when + pd.Timedelta(seconds=self.rules["stop_grace_seconds"]), key))
+                r = self.rules
+                nth = self._today_stats(when)[0] + 1 + sum(1 for p in self.open.values() if p is not pos)
+                if ((r.get("risk_per_trade_pct") or r.get("risk_per_trade_pct_of_drawdown")) and self.orders_seen
+                        and nth >= r.get("stop_check_from_trade", 1)):
+                    self.pending.append((when + pd.Timedelta(seconds=r["stop_grace_seconds"]), key))
             return
         if np.sign(signed_qty) == np.sign(pos.qty):           # adding to it
             under = (price - pos.price) * np.sign(pos.qty)       # points the position is up (+) or down (-)
@@ -247,18 +275,17 @@ class Watcher:
         stops = [o for o in self.orders.values()
                  if (o["account"], o["contract"]) == key and o["state"] in ACTIVE_ORDER
                  and o["type"] in ("StopMarket", "StopLimit") and o["action"].startswith(protective)]
-        cash = self.cash.get(pos.account)
-        pct = self.rules["risk_per_trade_pct"]
+        cap = self._risk_limit(pos.account)
+        rule = f"risk {self._limit_label('risk_per_trade')} per entry" + (f" (${cap:,.2f})" if cap else "")
         if not stops:
             self.alert("tilt-check: no stop", f"{pos.side.title()} {abs(pos.qty)} {pos.contract} at {_px(pos.price)} has no "
-                       f"working stop after {self.rules['stop_grace_seconds']} s.\nYour rule: risk {pct:g}% per entry.",
-                       urgent=True)
+                       f"working stop after {self.rules['stop_grace_seconds']} s.\nYour rule: {rule}.", urgent=True)
             return
         risk = sum(abs(pos.price - o["stop"]) * o["qty"] * self.pv.get(pos.instrument, 1.0) for o in stops)
-        if cash and risk > pct / 100 * cash:
+        if cap and risk > cap:
             self.alert("tilt-check: check this one",
-                       f"{pos.side.title()} {abs(pos.qty)} {pos.contract}: stop risk ${risk:,.2f} = {risk / cash:.1%} of "
-                       f"the account (${cash:,.0f}).\nYour rule: {pct:g}% (${pct / 100 * cash:,.2f}).", urgent=True)
+                       f"{pos.side.title()} {abs(pos.qty)} {pos.contract}: the stop risks ${risk:,.2f}.\n"
+                       f"Your rule: {rule}.", urgent=True)
 
     def on_snapshot(self, when: pd.Timestamp, account: str, unrealized: float, cash: float | None = None):
         if cash:
@@ -308,8 +335,9 @@ class Watcher:
                 lines.append(f"RULE: {mins:.0f} min after a losing exit, your pause is {wait:g} min.{why}")
         limit = self._day_limit(pos.account, when)
         if limit and pnl_today <= -limit:
-            lines.append(f"RULE: ${pnl_today:,.2f} today, past your {r['daily_loss_limit_pct']:g}% "
-                         f"daily limit (${limit:,.2f}).")
+            lines.append(f"RULE: ${pnl_today:,.2f} today, past your daily limit "
+                         f"({self._limit_label('daily_loss_limit')}, ${limit:,.2f}). Done for today, unless this is:")
+            lines += [f"  - {c}" for c in r.get("a_plus_checklist") or []]
         if r["max_trades_per_day"] and n_today + 1 > r["max_trades_per_day"]:
             lines.append(f"RULE: trade #{n_today + 1} today, your max is {r['max_trades_per_day']}.")
         if r["daily_loss_limit_usd"] and pnl_today <= -r["daily_loss_limit_usd"]:
@@ -325,6 +353,11 @@ class Watcher:
         session = session_of(pd.Series([when])).iloc[0]
         if session in r["avoid_sessions"]:
             lines.append(f"RULE: {session} is on your avoid list.")
+        if session in (r.get("weak_sessions") or []):
+            g = h[session_of(h["entry_time"]) == session] if len(h) else h
+            lines.append(f"WEAK HOURS: {session}: {len(g)} trades, win rate {(g['profit'] > 0).mean():.1%} "
+                         f"(usual {self.base:.0%}), net ${g['profit'].sum():,.2f}." if len(g) else
+                         f"WEAK HOURS: {session} is on your list.")
         for g in F.applicable(h, row):
             if any(m.lower() in g["group"].lower() for m in r["mute"]):
                 continue
@@ -338,7 +371,7 @@ class Watcher:
             lines.append(f"Your usual {pos.instrument} {side}: winners {u[0]:+.2f} pts (~{pos.price + d * u[0]:.2f}), "
                          f"losers {u[1]:+.2f} pts (~{pos.price + d * u[1]:.2f}). Medians of {u[2]} trades, "
                          f"not a prediction.")
-        flagged = any(l.startswith(("RULE", "RED ZONE", "SIZE")) for l in lines)
+        flagged = any(l.startswith(("RULE", "RED ZONE", "SIZE", "WEAK HOURS")) for l in lines)
         title = "tilt-check: check this one" if flagged else "tilt-check"
         self.alert(title, "\n".join([f"{side.title()} {abs(pos.qty)} {pos.contract} at {_px(pos.price)} ({session})."] + lines),
                    urgent=flagged)
@@ -346,10 +379,17 @@ class Watcher:
     def _added(self, pos: Position, price: float, before: float, under: float, when: pd.Timestamp):
         r = self.rules
         lines = []
-        if r["warn_adding_to_loser"] and under < 0:
+        # Scaling in inside a planned zone is fine; adding after price has gone further against her
+        # than her usual losing trade is averaging down.
+        usual = self.usual.get((pos.instrument, pos.side))
+        floor = r.get("adding_to_loser_min_pts")
+        if floor is None:
+            floor = abs(usual[1]) if usual else 0.0
+        if r["warn_adding_to_loser"] and under < -floor:
             held = (when - pos.opened).total_seconds() / 60
+            past = f", past your usual {floor:.2f}-pt loss" if floor else ""
             lines.append(f"Adding to a losing {pos.side}: average {_px(before)}, now {_px(price)} "
-                         f"({under:+.2f} pts, {held:.0f} min in).")
+                         f"({under:+.2f} pts{past}, {held:.0f} min in).")
         if r["max_contracts"] and abs(pos.qty) > r["max_contracts"]:
             lines.append(f"RULE: now {abs(pos.qty)} contracts, your max is {r['max_contracts']}.")
         cls = contract_class(pos.instrument)
@@ -376,8 +416,8 @@ class Watcher:
             lines.append(f"RULE: ${pnl_today:,.2f} today. That's your ${r['daily_loss_limit_usd']:,.0f} limit.")
         limit = self._day_limit(pos.account, when)
         if limit and pnl_today <= -limit:
-            lines.append(f"RULE: ${pnl_today:,.2f} today. That's your {r['daily_loss_limit_pct']:g}% daily limit "
-                         f"(${limit:,.2f}).")
+            lines.append(f"RULE: ${pnl_today:,.2f} today. That's your daily limit "
+                         f"({self._limit_label('daily_loss_limit')}, ${limit:,.2f}). Done for today.")
         if r["pause_after_losses_in_a_row"] and streak >= r["pause_after_losses_in_a_row"]:
             lines.append(f"RULE: {streak} losses in a row. Your rule says pause {r['pause_minutes']} min.")
         if r["max_trades_per_day"] and n_today >= r["max_trades_per_day"]:

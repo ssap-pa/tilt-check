@@ -218,7 +218,7 @@ def test_watch_prop_limits_pause_daily_pct_and_stop_risk(monkeypatch):
     w.on_fill(t0, "APEX-0014", "NQ 12-26", 3, 20000.0)                    # 3 minis, max 2
     assert "3 mini contracts, your max is 2" in said[-1][1]
     w.on_fill(t0 + pd.Timedelta(minutes=1), "APEX-0014", "NQ 12-26", -3, 19990.0)   # -10 pts x 3 x $20 = -$600 loss
-    assert "1% daily limit ($500.00)" in said[-1][1] and "next entry after 22:56" in said[-1][1]
+    assert "daily limit (1% of the account, $500.00)" in said[-1][1] and "next entry after 22:56" in said[-1][1]
     w.on_fill(t0 + pd.Timedelta(minutes=5), "APEX-0014", "MNQ 12-26", 1, 20000.0)  # 4 min after a loss
     assert "4 min after a losing exit, your pause is 15 min" in said[-1][1]
     # stop checks: an order feed exists, the entry gets a stop that risks more than 1%
@@ -228,8 +228,34 @@ def test_watch_prop_limits_pause_daily_pct_and_stop_risk(monkeypatch):
     w.on_fill(t0 + pd.Timedelta(minutes=30), "APEX-0014", "MNQ 12-26", 1, 20000.0)  # new long, stop check scheduled
     w.on_order(t0 + pd.Timedelta(minutes=30), "APEX-0014", "MNQ 12-26", "s2", "Sell", "StopMarket", "Working", 1, 19700.0)
     w.tick(t0 + pd.Timedelta(minutes=31))
-    assert said[-1][0] == "tilt-check: check this one" and "stop risk $600.00 = 1.2%" in said[-1][1]
+    assert said[-1][0] == "tilt-check: check this one" and "the stop risks $600.00" in said[-1][1]
     w.on_order(t0, "APEX-0014", "MNQ 12-26", "s2", "Sell", "StopMarket", "Cancelled", 1, 19700.0)
     w.pending.append((t0, ("APEX-0014", "MNQ 12-26")))
     w.tick(t0 + pd.Timedelta(minutes=32))
     assert said[-1][0] == "tilt-check: no stop"
+
+
+def test_watch_drawdown_limits_scale_ins_and_weak_hours(monkeypatch):
+    monkeypatch.setenv("TILTCHECK_TZ", "Asia/Seoul")
+    w, said = _watcher({"drawdown_usd": 2500, "risk_per_trade_pct_of_drawdown": 1, "daily_loss_limit_pct_of_drawdown": 15,
+                        "a_plus_checklist": ["first touch of the wick or FVG"], "stop_check_from_trade": 2,
+                        "weak_sessions": ["NY overnight"]})
+    usual_loss = abs(w.usual[("MNQ", "short")][1])
+    t0 = pd.Timestamp("2026-10-07 22:40:00")
+    w.on_order(t0, "A", "MNQ 12-26", "s0", "Buy", "StopMarket", "Cancelled", 1, 0.0)        # the add-on is running
+    w.on_fill(t0, "A", "MNQ 12-26", -1, 20000.0)                                          # trade 1: test trade
+    assert w.pending == []                                                                 # no stop check yet
+    w.on_fill(t0 + pd.Timedelta(seconds=30), "A", "MNQ 12-26", -1, 20000.0 + usual_loss / 2)   # scale-in inside her usual stop
+    assert not said[-1][1].startswith("MNQ 12-26, 2 contracts")
+    w.on_fill(t0 + pd.Timedelta(minutes=1), "A", "MNQ 12-26", -1, 20000.0 + usual_loss + 5)    # past her usual loss
+    assert "Adding to a losing short" in said[-1][1] and "past your usual" in said[-1][1]
+    w.on_fill(t0 + pd.Timedelta(minutes=2), "A", "MNQ 12-26", 3, 20200.0)                 # big loss: about -$1,200
+    assert "daily limit (15% of your $2,500 drawdown, $375.00). Done for today." in said[-1][1]
+    w.on_fill(t0 + pd.Timedelta(minutes=30), "A", "MNQ 12-26", 1, 20200.0)                # trade 2, after the limit
+    assert "Done for today, unless this is:" in said[-1][1] and "first touch of the wick or FVG" in said[-1][1]
+    w.on_order(t0, "A", "MNQ 12-26", "s1", "Sell", "StopMarket", "Working", 1, 20180.0)  # 20 pts x $2 = $40 > $25
+    w.tick(t0 + pd.Timedelta(minutes=31))
+    assert "the stop risks $40.00" in said[-1][1] and "1% of your $2,500 drawdown per entry ($25.00)" in said[-1][1]
+    w.on_fill(t0 + pd.Timedelta(minutes=32), "A", "MNQ 12-26", -1, 20201.0)
+    w.on_fill(pd.Timestamp("2026-10-08 13:00:00"), "A", "MNQ 12-26", 1, 20000.0)            # Korean lunchtime
+    assert "WEAK HOURS: NY overnight" in said[-1][1]

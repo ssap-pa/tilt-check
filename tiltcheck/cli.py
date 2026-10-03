@@ -129,15 +129,17 @@ def cmd_audit(args):
     from .bars import align, inside, load_bars
     from .exits import TICK
     from .indicators import at_entries
-    from .principles import audit, flags, trades_per_day, winners_in_ticks
+    from .principles import audit, flags, trades_per_day, vwap_bands, winners_in_ticks
     t = _history(args)
     bars = load_bars(args.bars)
     offset, _ = align(t, bars)
     ok = inside(t, bars, offset)
     tv = t[ok]
     print(f"{len(tv)} of {len(t)} entries have bars that match their fills (clock offset {offset}).\n")
-    f = flags(tv, at_entries(tv, bars, offset), vwap_sd=args.vwap_sd)
+    ind = at_entries(tv, bars, offset)
+    f = flags(tv, ind, vwap_sd=args.vwap_sd)
     print(audit(tv, f).to_string(index=False), "\n")
+    print(f"By distance from VWAP (sd; chase = with the stretch, fade = against it):\n{vwap_bands(tv, ind).to_string()}\n")
     print(f"Winners in ticks (target {args.target_ticks}):\n{winners_in_ticks(t, TICK, args.target_ticks).to_string()}\n")
     print(f"Busy days vs quiet days:\n{trades_per_day(t).to_string()}")
 
