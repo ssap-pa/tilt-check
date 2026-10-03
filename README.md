@@ -4,6 +4,8 @@ A pre-trade check for futures traders that learns from your own NinjaTrader hist
 
 [TabPFN](https://github.com/PriorLabs/TabPFN) (open weights) reads your past trades. [Gemma](https://ai.google.dev/gemma) (open weights, through [Ollama](https://ollama.com)) tells you in plain language what your own numbers say about the trade you're about to take. Everything runs on your machine. It never places an order.
 
+![A real check replayed on my partner's history: the groups this trade falls into, an honest model check, and a note from Gemma running locally](docs/demo.gif)
+
 I built it for my partner, who trades micro futures (MNQ, MES, MGC) on a prop-firm account and kept asking the same question after a bad session: *is this one of my good trades or one of my bad ones?*
 
 ## What it said about her account
@@ -24,24 +26,34 @@ NinjaTrader writes one row per exit, so a scaled-out entry becomes several rows,
 ## What a check looks like
 
 ```text
-$ python -m tiltcheck check "short 2 MNQ" --lang en
+$ python -m tiltcheck check "short 2 MNQ" --at "2026-10-02 13:05"   # replaying a real moment
 
-Plan: short 2 MNQ at 13h Fri, 0 loss(es) in a row before, 1 trade(s) earlier today, today P&L $26
+Plan: short 2 MNQ at 13h Fri, 5 loss(es) in a row before, 0 trade(s) earlier today, today P&L $0, 1334 min since last exit
 
 What your own history says about trades like this:
-- trade #2 of the day (your first 5 trades each day): 92 trades, win rate 55.4%, net $-327.38
+- trade #1 of the day (your first 5 trades each day): 91 trades, win rate 54.9%, net $-353.04
+- right after a losing trade: 90 trades, win rate 64.4%, net $1,179.90
+- after 2+ losses in a row: 37 trades, win rate 62.2%, net $533.82
 - bigger size than usual: 26 trades, win rate 61.5%, net $816.31
 - entries 12:00-14:59 (PC time): 17 trades, win rate 47.1%, net $-306.01
 - MNQ short: 128 trades, win rate 61.7%, net $182.20
 
-Model check: on trades it had not seen, TabPFN scored AUC 0.50 (0.50 = coin flip).
-Your history can't tell winners from losers yet, so the 59% below is shown for the log only.
+Model check: on trades it had not seen, TabPFN scored AUC 0.50 (0.50 = coin flip). Your history can't tell winners from losers yet, so the 65% below is shown for the log only.
+TabPFN chance this ends green: 65% (your usual: 64%)
+Closest past trades:
+- 09-15 02:21 short 1 MNQ: won $3.96 (trade #1 that day)
+- 10-01 14:29 short 1 MNQ: lost $-29.54 (trade #13 that day)
+- 10-01 14:19 short 1 MNQ: lost $-96.04 (trade #12 that day)
+- 09-17 23:35 short 1 MNQ: won $48.46 (trade #6 that day)
+- 09-05 02:14 short 1 MNQ: won $5.96 (trade #13 that day)
 
-Your group of trades in entries 12:00-14:59 has a win rate of 47.1%, compared to your
-overall 64%. ... Before clicking, how does the sizing of this trade compare ...   <- Gemma, local
+Your entries between 12:00-14:59 have a win rate of 47.1%, compared to your overall 64%.
+The group "right after a losing trade" shows a win rate of 64.4% with a net of $1,179.90.
+Given you have had 5 losses in a row, how will you manage the size of this trade? 
+
 
 take / skip / wait?  skip
-why (one line)?  second trade of the day, lunch hour
+why (one line)?  first trade of the day, lunch window
 ```
 
 Every check is logged with her decision and reason. `learn` imports the next export, adds the new trades to the history TabPFN reads (there's no training run, it's in-context, so new trades count on the very next check), and matches each logged decision to the trade that followed, so she can see whether skipping paid off.

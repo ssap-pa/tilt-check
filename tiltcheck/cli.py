@@ -54,6 +54,8 @@ def cmd_check(args):
     plan = parse_plan(args.plan) if not args.instrument else {
         "instrument": args.instrument, "side": args.side, "qty": args.qty}
     now = pd.Timestamp(args.at) if args.at else pd.Timestamp.now().floor("s")
+    # Only trades that had closed by `now` exist at that moment (matters when replaying with --at).
+    t = t[t["exit_time"] < now].reset_index(drop=True)
     row = planned_row(t, plan["instrument"], plan["side"], plan["qty"], now)
     p = win_probability(t, row)
     auc = reliability(t)
