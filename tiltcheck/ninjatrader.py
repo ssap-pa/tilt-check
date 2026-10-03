@@ -75,6 +75,7 @@ def load_trades(path: str | Path, account: str | None = None) -> pd.DataFrame:
     out = pd.DataFrame({
         "account": df.get("account", pd.Series(["?"] * len(df), index=df.index)).astype(str),
         "instrument": df["instrument"].astype(str).str.split().str[0],
+        "contract": df["instrument"].astype(str).str.strip(),      # "MNQ DEC26", for matching minute bars
         "side": df["market_pos"].map(lambda v: "long" if v in LONG else "short"),
         "qty": pd.to_numeric(df["qty"], errors="coerce").fillna(1).astype(int),
         "entry_time": df["entry_time"].map(_time),
@@ -96,7 +97,7 @@ def merge_split_rows(t: pd.DataFrame) -> pd.DataFrame:
     decision, so those rows are folded back into a single trade."""
     key = ["account", "instrument", "side", "entry_time"]
     g = t.groupby(key, sort=False)
-    merged = g.agg(qty=("qty", "sum"), exit_time=("exit_time", "max"),
+    merged = g.agg(contract=("contract", "first"), qty=("qty", "sum"), exit_time=("exit_time", "max"),
                    entry_price=("entry_price", "first"), exit_price=("exit_price", "last"),
                    profit=("profit", "sum"), commission=("commission", "sum"),
                    mae=("mae", "max"), mfe=("mfe", "max"), rows=("qty", "size")).reset_index()

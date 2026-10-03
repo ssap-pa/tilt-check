@@ -3,6 +3,7 @@
   python -m tiltcheck report --csv trades.csv [--account 0014] [--lang ko]
   python -m tiltcheck check "short 2 MNQ, just got stopped out" [--csv trades.csv] [--lang ko]
   python -m tiltcheck learn --csv new_export.csv
+  python -m tiltcheck exits --csv trades.csv [--bars "MNQ 12-26.Last.txt" ...]
 
 It never places orders. It reads your history, tells you what your own numbers
 say about the trade you are about to take, and writes down what you decided.
@@ -92,6 +93,33 @@ def cmd_check(args):
     print("Logged. It will be matched to what happened next when you import your next export.")
 
 
+def cmd_exits(args):
+    from .bars import align, load_bars
+    from .exits import how_she_exits, replay
+    t = _history(args)
+    print("How you exit now (trades closed in one piece), points per contract and minutes held:")
+    print(how_she_exits(t).to_string(), "\n")
+    if not args.bars:
+        print("To replay your entries with a fixed target and stop, export minute bars from NinjaTrader\n"
+              "(Control Center > New > Historical Data > Export, Minute) and pass them with --bars.")
+        return
+    bars = load_bars(args.bars)
+    offset, share = align(t, bars)
+    print(f"Bars line up with your fills when shifted by {offset} ({share:.0%} of entries sit inside their bar).")
+    if share < 0.8:
+        print("That's too few to trust. Check that the bar files are the same contracts and dates as the trades.")
+        return
+    r = replay(t, bars, offset, horizon=args.horizon)
+    mt, ms = r.best
+    sizes = ", ".join(f"{k} +{a:g}/-{b:g}" for k, (a, b) in r.sizes.items())
+    print(f"Replayed {r.covered} of {r.total} entries on the bars that followed them (max {args.horizon} min each).")
+    print(f"Net $ for each bracket on your older {r.train} trades (rows: target, columns: stop, "
+          f"in multiples of your usual move):\n{r.in_sample.to_string()}\n")
+    print(f"Best on the older trades: target {mt:g}x / stop {ms:g}x your usual move ({sizes} points).")
+    print(f"On your newer {r.test} trades, which it didn't see: that bracket ${r.bracket_test:,.2f}, "
+          f"your own exits ${r.actual_test:,.2f}.")
+
+
 def cmd_learn(args):
     h = journal.merge_history(load_trades(args.csv, args.account))
     d = journal.match_outcomes(h)
@@ -102,20 +130,23 @@ def cmd_learn(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="tiltcheck")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("report", "check", "learn"):
+    for name in ("report", "check", "learn", "exits"):
         p = sub.add_parser(name)
         p.add_argument("--csv")
         p.add_argument("--account", help="keep accounts ending with this (e.g. 0014)")
         p.add_argument("--lang", default="en", choices=["en", "ko"])
         if name == "report":
             p.add_argument("--no-llm", action="store_true")
+        if name == "exits":
+            p.add_argument("--bars", nargs="*", help="NinjaTrader minute-bar exports (files or a folder)")
+            p.add_argument("--horizon", type=int, default=120, help="minutes to follow each entry")
         if name == "check":
             p.add_argument("plan", help='e.g. "short 2 MNQ right after a stop"')
             p.add_argument("--instrument"); p.add_argument("--side", default="long"); p.add_argument("--qty", type=int, default=1)
             p.add_argument("--at", help="pretend it is this time (for demos), e.g. 2026-10-02 14:05")
             p.add_argument("--decision", choices=["take", "skip", "wait"]); p.add_argument("--reason")
     a = ap.parse_args(argv)
-    {"report": cmd_report, "check": cmd_check, "learn": cmd_learn}[a.cmd](a)
+    {"report": cmd_report, "check": cmd_check, "learn": cmd_learn, "exits": cmd_exits}[a.cmd](a)
 
 
 if __name__ == "__main__":

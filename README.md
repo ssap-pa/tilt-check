@@ -62,6 +62,16 @@ why (one line)?  first trade of the day, lunch window
 
 Every check is logged with her decision and reason. `learn` imports the next export, adds the new trades to the history TabPFN reads (there's no training run, it's in-context, so new trades count on the very next check), and matches each logged decision to the trade that followed, so she can see whether skipping paid off.
 
+## Where to close
+
+`exits` looks at how she closes trades. Part of that is already in the export. On MNQ her winners close at a median **+7.88 points after 4.7 minutes**, and her losers at **-11.75 points after 7.4 minutes**. She takes profits faster than she takes losses.
+
+The other part is "where should a trade like this be closed", and that needs to know where price went while she was in it. Her prop-account export can't say: NinjaTrader's MAE and MFE columns there just repeat the final P&L (on 99.7% of rows). So `exits --bars` takes minute bars exported from NinjaTrader (Control Center > New > Historical Data > Export, Minute) and replays every entry with fixed brackets: a target and a stop, in multiples of her usual move. It works out the bars' clock from her fills, picks the best bracket on her older 70% of trades, then scores it on the newer 30% against what her own exits made. The rules lean pessimistic: a bar that touches both the stop and the target counts as the stop.
+
+```bash
+python -m tiltcheck exits --csv trades.csv --bars "MNQ 09-26.Last.txt" "MNQ 12-26.Last.txt"
+```
+
 ## Install
 
 ```bash
@@ -78,6 +88,7 @@ Export from NinjaTrader: Control Center > Trade Performance > Trades tab > right
 python -m tiltcheck report --csv trades.csv [--account 0014] [--lang ko]
 python -m tiltcheck check "short 2 MNQ right after a stop" --csv trades.csv
 python -m tiltcheck learn --csv next_export.csv
+python -m tiltcheck exits --csv trades.csv [--bars bars_folder/]
 ```
 
 Try it without your own data: `python -m tiltcheck report --csv sample/trades_sample.csv` (made-up trades with a slow-start pattern baked in).

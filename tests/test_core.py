@@ -83,3 +83,53 @@ def test_new_york_sessions_from_korean_pc_clock(tmp_path, monkeypatch):
     # after daylight saving ends, the same session sits an hour later on a Korean clock
     assert label("NY open", 9 * 60 + 30, 12 * 60, "2026-11-10") == \
         "NY open 09:30-12:00 New York (23:30-02:00 on this PC)"
+
+
+def _bars_file(tmp_path):
+    """Synthetic MNQ 12-26 minute bars in UTC: price climbs 1 point a minute for an hour."""
+    lines = []
+    for k in range(120):
+        p = 100.0 + k if k <= 60 else 160.0 - (k - 60)
+        close_utc = pd.Timestamp("2026-09-15 00:00") + pd.Timedelta(minutes=k + 1)
+        lines.append(f"{close_utc:%Y%m%d %H%M%S};{p};{p + 1.25};{p - 0.25};{p + 1};100")
+    f = tmp_path / "MNQ 12-26.Last.txt"
+    f.write_text("\n".join(lines), encoding="utf-8")
+    return f
+
+
+def _two_trades():
+    base = dict(account="APEX-0014", instrument="MNQ", contract="MNQ DEC26", qty=1, commission=1.04, rows=1)
+    return pd.DataFrame([
+        # long at 09:10:30 Korea time = 00:10:30 UTC, filled inside that minute's bar
+        dict(base, side="long", entry_time=pd.Timestamp("2026-09-15 09:10:30"),
+             exit_time=pd.Timestamp("2026-09-15 09:13:00"), entry_price=110.5, exit_price=112.5, profit=2.96),
+        # short into the climb at 09:20:30 Korea time
+        dict(base, side="short", entry_time=pd.Timestamp("2026-09-15 09:20:30"),
+             exit_time=pd.Timestamp("2026-09-15 09:30:00"), entry_price=120.5, exit_price=130.5, profit=-21.04),
+    ])
+
+
+def test_bars_line_up_and_brackets_replay(tmp_path):
+    from tiltcheck.bars import align, contract_key, load_bars
+    from tiltcheck.exits import bracket, paths, point_values
+    assert contract_key("MNQ DEC26") == contract_key("MNQ 12-26") == "MNQ 12-26"
+    bars = load_bars([_bars_file(tmp_path)])
+    t = _two_trades()
+    offset, share = align(t, bars)
+    assert offset == pd.Timedelta(hours=9) and share == 1.0      # bars were in UTC, trades on a Korean clock
+    assert point_values(t)["MNQ"] == 2.0
+    ps = paths(t, bars, offset)
+    assert bracket(ps[0], target=5, stop=5) == 5                  # the climb reaches +5 before -5
+    assert bracket(ps[1], target=5, stop=5) == -5                 # the short gets stopped by the same climb
+
+
+def test_replay_picks_on_older_trades_and_scores_newer(tmp_path):
+    from tiltcheck.bars import align, load_bars
+    from tiltcheck.exits import replay
+    bars = load_bars([_bars_file(tmp_path)])
+    t = _two_trades()
+    offset, _ = align(t, bars)
+    r = replay(t, bars, offset)
+    assert (r.covered, r.train, r.test) == (2, 1, 1)
+    assert r.actual_test == -21.04                # the short she actually closed for a loss
+    assert r.in_sample.shape == (6, 6)
