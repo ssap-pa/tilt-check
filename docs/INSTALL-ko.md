@@ -62,8 +62,10 @@ cd $HOME\tilt-check
 5. 감시 시작:
 
 ```powershell
-.venv\Scripts\python -m tiltcheck watch --csv "C:\경로\trades.csv" --account 0014
+.venv\Scripts\python -m tiltcheck watch --csv "C:\경로\trades.csv" --account 0014 --bars "C:\경로\bars"
 ```
+
+`--bars`를 주면 진입마다 `CHART:` 줄이 하나 더 붙습니다: 15분 200EMA 기준 추세 순/역, 세션 VWAP에서 몇 sd 떨어졌는지, 추격인지 페이드인지(닫힌 봉만 사용). 규칙 파일에 `"with_15m_200": true`(추세 역행 경고), `"vwap_sd_max": 2`(그 이상 추격 경고), `"fade_inside_1sd": true`(첫 밴드 안 페이드 경고)를 넣으면 경고도 뜹니다. 지금은 내보낸 봉 파일을 읽으므로 거래 전에 최신 봉을 한 번 내보내 두면 됩니다(실시간 봉은 다음 단계).
 
 규칙을 어기는 체결이 들어오면 Windows 알림이 뜹니다(긴급이면 소리). 진입마다 "평소 익절/손절 중간값" 한 줄도 조용히 보여 줍니다. 주문을 내거나 바꾸거나 취소하는 기능은 없습니다.
 
