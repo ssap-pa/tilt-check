@@ -327,3 +327,15 @@ def test_three_numbers_has_the_three_tables(tmp_path):
     md = three_numbers(_load(tmp_path, KO, account="0014"))
     assert md.count("**1. By New York session**") == 1 and "**2. Your first trades" in md and "**3. After a loss**" in md
     assert "3 trades" in md and "| Within 15 minutes |" in md
+
+
+def test_day_block_resample_share():
+    import datetime as dt
+    from tiltcheck.exits import bracket_vs_exits_share
+    days = [dt.date(2026, 9, d) for d in range(1, 11) for _ in range(3)]
+    always_up = [1.0] * 30
+    assert bracket_vs_exits_share(always_up, days, n=200) == 1.0
+    mixed = [1.0, -1.0] * 15
+    s = bracket_vs_exits_share(mixed, days, n=400)
+    assert 0.2 < s < 0.8                      # pure noise lands near a coin flip
+    assert bracket_vs_exits_share([1.0], [dt.date(2026, 9, 1)]) != bracket_vs_exits_share([1.0], [dt.date(2026, 9, 1)])  # NaN with < 5 days
