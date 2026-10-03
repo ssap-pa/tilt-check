@@ -171,17 +171,22 @@ def cmd_watch(args):
     from .watch import Watcher, desktop_alert, documents_dir, fills_from_history, follow, load_rules
     t = _history(args)
     rules = load_rules(args.rules)
+    bars, offset = None, pd.Timedelta(0)
+    if args.bars:
+        from .bars import align, load_bars
+        bars = load_bars(args.bars)
+        offset, _ = align(t, bars)
     if args.replay_day:
         # Replay one real day: history before it, then that day's trades as fills, in order.
         day = pd.Timestamp(args.replay_day)
-        w = Watcher(t[t["exit_time"] < day].reset_index(drop=True), rules,
+        w = Watcher(t[t["exit_time"] < day].reset_index(drop=True), rules, bars=bars, offset=offset,
                     alert=lambda title, text, urgent=False: print(f"[{title}]{' (beep)' if urgent else ''}\n{text}\n"))
         for when, acct, contract, q, px in fills_from_history(t, args.replay_day):
             print(f"--- {when:%H:%M:%S} fill {q:+d} {contract} @ {px:.2f}")
             w.on_fill(when, acct, contract, int(q), float(px))
         return
     feed = Path(args.feed) if args.feed else documents_dir() / "tilt-check"
-    follow(Watcher(t, rules, alert=desktop_alert), feed)
+    follow(Watcher(t, rules, bars=bars, offset=offset, alert=desktop_alert), feed)
 
 
 def cmd_learn(args):
@@ -219,6 +224,7 @@ def main(argv=None):
             p.add_argument("--feed", help="folder the NinjaTrader add-on writes to (default Documents\\tilt-check)")
             p.add_argument("--rules", help="rules.json (default ~/.tilt-check/rules.json)")
             p.add_argument("--replay-day", help="replay one past day from the history as fills, e.g. 2026-10-01")
+            p.add_argument("--bars", nargs="*", help="1-minute bars (NinjaTrader export files/folder or CSV) for CHART lines")
         if name == "check":
             p.add_argument("plan", help='e.g. "short 2 MNQ right after a stop"')
             p.add_argument("--instrument"); p.add_argument("--side", default="long"); p.add_argument("--qty", type=int, default=1)

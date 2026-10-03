@@ -152,6 +152,8 @@ class Watcher:
     orders: dict = field(default_factory=dict)        # order id -> latest state
     pending: list = field(default_factory=list)       # (due time, position key) stop checks
     orders_seen: bool = False
+    bars: dict = None                                 # contract -> 1-minute bars (optional, for chart lines)
+    offset: pd.Timedelta = pd.Timedelta(0)            # bar clock -> PC clock, from bars.align
 
     def __post_init__(self):
         h = self.history
@@ -365,6 +367,7 @@ class Watcher:
                     and g["win_rate"] <= self.base - r["red_zone_gap"]):
                 lines.append(f"RED ZONE: {g['group']}: {g['trades']} trades, win rate {g['win_rate']:.1%} "
                              f"(usual {self.base:.0%}), net ${g['pnl']:,.2f}.")
+        lines += self._chart(pos, side, when)
         u = self.usual.get((pos.instrument, side))
         if u:
             d = 1 if side == "long" else -1
@@ -375,6 +378,36 @@ class Watcher:
         title = "tilt-check: check this one" if flagged else "tilt-check"
         self.alert(title, "\n".join([f"{side.title()} {abs(pos.qty)} {pos.contract} at {_px(pos.price)} ({session})."] + lines),
                    urgent=flagged)
+
+    def _chart(self, pos: Position, side: str, when: pd.Timestamp) -> list[str]:
+        """Where the fill sits against the 15m 200 EMA and session VWAP, from closed bars only.
+        One CHART line of facts, plus RULE lines for the chart rules she turned on."""
+        if not self.bars:
+            return []
+        from .indicators import at_entries
+        one = pd.DataFrame([{"contract": pos.contract, "entry_time": when, "entry_price": pos.price}])
+        ind = at_entries(one, self.bars, self.offset)
+        if ind.empty:
+            return []
+        i = ind.iloc[0]
+        d = 1 if side == "long" else -1
+        facts, rules, r = [], [], self.rules
+        if pd.notna(i.get("ema200_15m")):
+            above = pos.price > i["ema200_15m"]
+            with_trend = (above and d > 0) or (not above and d < 0)
+            facts.append(f"15m 200 EMA {i['ema200_15m']:.2f}, {'with' if with_trend else 'against'} the trade")
+            if r.get("with_15m_200") and not with_trend:
+                rules.append("RULE: against the 15m 200 EMA, your rule says trade with it.")
+        if pd.notna(i.get("vwap")) and i.get("vwap_sd", 0) > 0:
+            z = (pos.price - i["vwap"]) / i["vwap_sd"]
+            chasing = (z > 0 and d > 0) or (z < 0 and d < 0)
+            facts.append(f"VWAP {z:+.1f} sd, {'chasing' if chasing else 'fading'} the stretch")
+            cap = r.get("vwap_sd_max")
+            if cap and chasing and abs(z) > cap:
+                rules.append(f"RULE: chasing {abs(z):.1f} sd past VWAP, your max is {cap:g}.")
+            if r.get("fade_inside_1sd") and not chasing and abs(z) < 1:
+                rules.append(f"RULE: fading inside the first VWAP band ({abs(z):.1f} sd); your record is weakest there.")
+        return rules + ([f"CHART: {'; '.join(facts)}."] if facts else [])
 
     def _added(self, pos: Position, price: float, before: float, under: float, when: pd.Timestamp):
         r = self.rules

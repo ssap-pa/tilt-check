@@ -107,6 +107,8 @@ Rules are optional. An example (the 15-minute pause comes from her own numbers: 
  "pause_after_loss_minutes": 15, "mute": ["your first 5 trades"]}
 ```
 
+Chart lines (optional): pass `--bars` to `watch` and every entry also gets a `CHART:` line computed from closed bars only (15m 200 EMA with/against the trade, distance from session VWAP in sd, chasing or fading). Three rule keys use it: `"with_15m_200": true` warns when an entry is against the 15-minute 200 EMA, `"vwap_sd_max": 2` warns when chasing further than that, `"fade_inside_1sd": true` warns on a fade inside the first VWAP band. Replaying October 1 on her own bars with those on, 4 of her 12 entries drew the trend warning. Live bars from the add-on are the next step ([docs/LIVE-INDICATORS.md](docs/LIVE-INDICATORS.md)); until then the bars come from an export.
+
 ## Where to close
 
 `exits` looks at how she closes trades. Part of that is already in the export. On MNQ her winners close at a median **+7.88 points after 4.7 minutes**, and her losers at **-11.75 points after 7.4 minutes**. She takes profits faster than she takes losses.
