@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://ssap-pa.github.io/tilt-check/sitemap.xml
