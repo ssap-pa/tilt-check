@@ -35,7 +35,7 @@ def flags(trades: pd.DataFrame, ind: pd.DataFrame, vwap_sd: float = 1.0) -> pd.D
     f["with the 5m 100 EMA trend"] = where((px - t["ema100_5m"]) * d > 0, t["ema100_5m"].notna())
     stretched = (px - t["vwap"]) * d > vwap_sd * t["vwap_sd"]
     f[f"not chasing VWAP (> {vwap_sd:g} sd)"] = where(~stretched, t["vwap"].notna())
-    f["near the 1h 9 EMA (within her usual move)"] = where((px - t["ema9_1h"]).abs() <= unit, t["ema9_1h"].notna())
+    f["near the 1h 9 EMA (within your usual move)"] = where((px - t["ema9_1h"]).abs() <= unit, t["ema9_1h"].notna())
     in_dir = ((t["fvg"] == "bull") & (d > 0)) | ((t["fvg"] == "bear") & (d < 0))
     f["in a first-touch 15m FVG, trade direction"] = where(in_dir & (t["fvg_first_touch"] == True),
                                                            t["ema9_1h"].notna())

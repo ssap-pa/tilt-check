@@ -259,3 +259,15 @@ def test_watch_drawdown_limits_scale_ins_and_weak_hours(monkeypatch):
     w.on_fill(t0 + pd.Timedelta(minutes=32), "A", "MNQ 12-26", -1, 20201.0)
     w.on_fill(pd.Timestamp("2026-10-08 13:00:00"), "A", "MNQ 12-26", 1, 20000.0)            # Korean lunchtime
     assert "WEAK HOURS: NY overnight" in said[-1][1]
+
+
+def test_audit_report_runs_without_bars(tmp_path):
+    from tiltcheck.report_md import write_report
+    t = _load(tmp_path, KO, account="0014")
+    md = write_report(t)
+    assert md.startswith("# Your Trading History, Audited")
+    for h in ("## 1. The period on one page", "## 4. After a loss", "## 6. How you exit", "## 8. What the data"):
+        assert h in md
+    assert "3 over 1 trading days" in md
+    assert "needs 1-minute bars" in md          # no bars -> the replay and the rules say so
+    assert " her " not in md and "she " not in md  # written to the trader, not about her

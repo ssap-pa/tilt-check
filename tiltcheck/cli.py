@@ -144,6 +144,23 @@ def cmd_audit(args):
     print(f"Busy days vs quiet days:\n{trades_per_day(t).to_string()}")
 
 
+def cmd_audit_report(args):
+    """The written report: every section of the audit as Markdown, from one export."""
+    from .report_md import write_report
+    t = _history(args)
+    bars = offset = None
+    if args.bars:
+        from .bars import align, load_bars
+        bars = load_bars(args.bars)
+        offset, _ = align(t, bars)
+    text = write_report(t, bars, offset, pause=args.pause, vwap_sd=args.vwap_sd)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"Wrote {args.out} ({len(text.splitlines())} lines).")
+    else:
+        print(text)
+
+
 def cmd_watch(args):
     from .watch import Watcher, desktop_alert, documents_dir, fills_from_history, follow, load_rules
     t = _history(args)
@@ -171,7 +188,7 @@ def cmd_learn(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="tiltcheck")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("report", "check", "learn", "exits", "watch", "audit"):
+    for name in ("report", "check", "learn", "exits", "watch", "audit", "audit-report"):
         p = sub.add_parser(name)
         p.add_argument("--csv")
         p.add_argument("--account", help="keep accounts ending with this (e.g. 0014)")
@@ -185,6 +202,11 @@ def main(argv=None):
             p.add_argument("--bars", nargs="+", required=True, help="NinjaTrader minute-bar exports (files or a folder)")
             p.add_argument("--vwap-sd", type=float, default=1.0, help="how far from VWAP counts as chasing")
             p.add_argument("--target-ticks", type=int, default=200)
+        if name == "audit-report":
+            p.add_argument("--bars", nargs="*", help="NinjaTrader minute-bar exports (files or a folder); optional")
+            p.add_argument("--pause", type=int, default=15, help="minutes after a loss to compare re-entries against")
+            p.add_argument("--vwap-sd", type=float, default=1.0)
+            p.add_argument("--out", help="write the Markdown here instead of printing")
         if name == "watch":
             p.add_argument("--feed", help="folder the NinjaTrader add-on writes to (default Documents\\tilt-check)")
             p.add_argument("--rules", help="rules.json (default ~/.tilt-check/rules.json)")
@@ -196,7 +218,7 @@ def main(argv=None):
             p.add_argument("--decision", choices=["take", "skip", "wait"]); p.add_argument("--reason")
     a = ap.parse_args(argv)
     {"report": cmd_report, "check": cmd_check, "learn": cmd_learn, "exits": cmd_exits, "watch": cmd_watch,
-     "audit": cmd_audit}[a.cmd](a)
+     "audit": cmd_audit, "audit-report": cmd_audit_report}[a.cmd](a)
 
 
 if __name__ == "__main__":
