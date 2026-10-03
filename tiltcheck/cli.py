@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 import pandas as pd
 
@@ -123,6 +124,23 @@ def cmd_exits(args):
               f"your own exits ${r.actual_test:,.2f}.")
 
 
+def cmd_watch(args):
+    from .watch import Watcher, desktop_alert, documents_dir, fills_from_history, follow, load_rules
+    t = _history(args)
+    rules = load_rules(args.rules)
+    if args.replay_day:
+        # Replay one real day: history before it, then that day's trades as fills, in order.
+        day = pd.Timestamp(args.replay_day)
+        w = Watcher(t[t["exit_time"] < day].reset_index(drop=True), rules,
+                    alert=lambda title, text, urgent=False: print(f"[{title}]{' (beep)' if urgent else ''}\n{text}\n"))
+        for when, acct, contract, q, px in fills_from_history(t, args.replay_day):
+            print(f"--- {when:%H:%M:%S} fill {q:+d} {contract} @ {px:.2f}")
+            w.on_fill(when, acct, contract, int(q), float(px))
+        return
+    feed = Path(args.feed) if args.feed else documents_dir() / "tilt-check"
+    follow(Watcher(t, rules, alert=desktop_alert), feed)
+
+
 def cmd_learn(args):
     h = journal.merge_history(load_trades(args.csv, args.account))
     d = journal.match_outcomes(h)
@@ -133,7 +151,7 @@ def cmd_learn(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="tiltcheck")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("report", "check", "learn", "exits"):
+    for name in ("report", "check", "learn", "exits", "watch"):
         p = sub.add_parser(name)
         p.add_argument("--csv")
         p.add_argument("--account", help="keep accounts ending with this (e.g. 0014)")
@@ -143,13 +161,17 @@ def main(argv=None):
         if name == "exits":
             p.add_argument("--bars", nargs="*", help="NinjaTrader minute-bar exports (files or a folder)")
             p.add_argument("--horizon", type=int, default=120, help="minutes to follow each entry")
+        if name == "watch":
+            p.add_argument("--feed", help="folder the NinjaTrader add-on writes to (default Documents\\tilt-check)")
+            p.add_argument("--rules", help="rules.json (default ~/.tilt-check/rules.json)")
+            p.add_argument("--replay-day", help="replay one past day from the history as fills, e.g. 2026-10-01")
         if name == "check":
             p.add_argument("plan", help='e.g. "short 2 MNQ right after a stop"')
             p.add_argument("--instrument"); p.add_argument("--side", default="long"); p.add_argument("--qty", type=int, default=1)
             p.add_argument("--at", help="pretend it is this time (for demos), e.g. 2026-10-02 14:05")
             p.add_argument("--decision", choices=["take", "skip", "wait"]); p.add_argument("--reason")
     a = ap.parse_args(argv)
-    {"report": cmd_report, "check": cmd_check, "learn": cmd_learn, "exits": cmd_exits}[a.cmd](a)
+    {"report": cmd_report, "check": cmd_check, "learn": cmd_learn, "exits": cmd_exits, "watch": cmd_watch}[a.cmd](a)
 
 
 if __name__ == "__main__":

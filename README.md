@@ -62,6 +62,48 @@ why (one line)?  first trade of the day, lunch window
 
 Every check is logged with her decision and reason. `learn` imports the next export, adds the new trades to the history TabPFN reads (there's no training run, it's in-context, so new trades count on the very next check), and matches each logged decision to the trade that followed, so she can see whether skipping paid off.
 
+## Watch mode: nothing to type
+
+Typing the trade before every click is friction, and the moments that matter are the ones when nobody stops to type. So there's a second way in. A tiny NinjaTrader add-on (`ninjatrader/TiltCheckFeed.cs`) writes every fill to `Documents\tilt-check\fills.csv`, plus the account's open P&L every 2 seconds while a position is open. `watch` follows those files and raises a Windows notification (it doesn't steal the keyboard focus, and it beeps when something's wrong):
+
+- **her own rules** from `~/.tilt-check/rules.json`: trades per day, daily loss limit, pause after N losses in a row, max contracts, sessions to avoid
+- **adding to a loser**: another contract in the same direction while the position is under water
+- **size**: an entry three or more times her usual size
+- **red zones** from her history: a group she's in right now that sits well below her usual win rate, with a net loss, over enough trades (a group she already knows about can be muted)
+- **past her usual loss**: an open trade losing more than her median losing trade for that setup
+- at every entry, her usual winner and loser for that setup, as prices. They're her own medians, not a prediction.
+
+The add-on only listens. It never places, changes or cancels an order. Her prop firm bans fully automated trading anyway; brackets she sets herself in an ATM template are fine.
+
+Replaying one of her real days through it (`watch --replay-day 2026-10-01`), two of the alerts it would have raised:
+
+```text
+--- 14:03:37 fill -1 MNQ DEC26 @ 30995.00
+[tilt-check: check this one] (beep)
+MNQ DEC26, 2 contracts now.
+Adding to a losing short: average 30964.75, now 30995 (-30.25 pts, 16 min in).
+
+--- 14:29:00 fill -1 MNQ DEC26 @ 31061.75
+[tilt-check: check this one] (beep)
+MNQ DEC26, 2 contracts now.
+Adding to a losing short: average 31028.5, now 31061.75 (-33.25 pts, 9 min in).
+```
+
+All four of those contracts closed at a loss, -$273.16 together.
+
+Setup: copy `ninjatrader/TiltCheckFeed.cs` to `Documents\NinjaTrader 8\bin\Custom\AddOns\`, open New > NinjaScript Editor, press F5, and restart NinjaTrader. Then:
+
+```bash
+python -m tiltcheck watch --csv trades.csv --account 0014
+```
+
+Rules are optional. An example `rules.json`:
+
+```json
+{"max_trades_per_day": 15, "daily_loss_limit_usd": 300, "pause_after_losses_in_a_row": 3,
+ "pause_minutes": 15, "max_contracts": 2, "avoid_sessions": ["NY overnight"], "mute": ["your first 5 trades"]}
+```
+
 ## Where to close
 
 `exits` looks at how she closes trades. Part of that is already in the export. On MNQ her winners close at a median **+7.88 points after 4.7 minutes**, and her losers at **-11.75 points after 7.4 minutes**. She takes profits faster than she takes losses.
@@ -97,6 +139,7 @@ python -m tiltcheck report --csv trades.csv [--account 0014] [--lang ko]
 python -m tiltcheck check "short 2 MNQ right after a stop" --csv trades.csv
 python -m tiltcheck learn --csv next_export.csv
 python -m tiltcheck exits --csv trades.csv [--bars bars_folder/]
+python -m tiltcheck watch --csv trades.csv [--rules rules.json]
 ```
 
 Try it without your own data: `python -m tiltcheck report --csv sample/trades_sample.csv` (made-up trades with a slow-start pattern baked in).

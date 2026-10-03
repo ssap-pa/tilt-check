@@ -133,3 +133,54 @@ def test_replay_picks_on_older_trades_and_scores_newer(tmp_path):
     assert (r.covered, r.train, r.test) == (2, 1, 1)
     assert r.actual_test == -21.04                # the short she actually closed for a loss
     assert r.in_sample.shape == (6, 6)
+
+
+def _watcher(rules=None):
+    from tiltcheck.watch import DEFAULT_RULES, Watcher
+    hist = load_trades(Path(__file__).resolve().parent.parent / "sample" / "trades_sample.csv")
+    said = []
+    w = Watcher(hist, dict(DEFAULT_RULES, **(rules or {})),
+                alert=lambda title, text, urgent=False: said.append((title, text, urgent)))
+    return w, said
+
+
+def test_watch_flags_adding_to_a_loser_and_big_size():
+    w, said = _watcher()
+    t0 = pd.Timestamp("2026-10-05 23:00:00")
+    w.on_fill(t0, "APEX-0014", "MNQ 12-26", -1, 20000.0)                       # short 1
+    w.on_fill(t0 + pd.Timedelta(minutes=9), "APEX-0014", "MNQ 12-26", -1, 20033.25)   # adds 33 points under water
+    assert said[-1][2] and "Adding to a losing short" in said[-1][1] and "-33.25 pts" in said[-1][1]
+    w.on_fill(t0 + pd.Timedelta(minutes=20), "APEX-0014", "MNQ 12-26", 2, 20040.0)    # flat
+    assert w.open == {} and len(w.today) == 1 and w.today[0]["profit"] < 0
+    w.on_fill(t0 + pd.Timedelta(minutes=30), "APEX-0014", "MNQ 12-26", 20, 20040.0)   # 20 contracts
+    assert "SIZE: 20 contracts" in said[-1][1] and said[-1][2]
+
+
+def test_watch_rules_from_rules_json(monkeypatch):
+    monkeypatch.setenv("TILTCHECK_TZ", "Asia/Seoul")
+    w, said = _watcher({"max_contracts": 2, "daily_loss_limit_usd": 50, "avoid_sessions": ["NY overnight"]})
+    t0 = pd.Timestamp("2026-10-06 12:30:00")                                    # Korean lunchtime = NY overnight
+    w.on_fill(t0, "APEX-0014", "MNQ 12-26", 3, 20000.0)
+    text = said[-1][1]
+    assert "your max is 2" in text and "NY overnight is on your avoid list" in text
+    w.on_fill(t0 + pd.Timedelta(minutes=5), "APEX-0014", "MNQ 12-26", -3, 19985.0)   # -15 pts x 3 x $2 = -$90
+    assert said[-1][0] == "tilt-check: rule" and "$50 limit" in said[-1][1]
+
+
+def test_watch_reads_the_add_on_files(tmp_path, monkeypatch):
+    from tiltcheck.watch import follow
+    monkeypatch.setenv("TILTCHECK_TZ", "Asia/Seoul")
+    w, said = _watcher()
+    (tmp_path / "fills.csv").write_text("time_utc,account,instrument,signed_qty,price,execution_id,platform_time\n",
+                                        encoding="utf-8")
+    ticks = iter(range(3))
+
+    def stop():
+        n = next(ticks, None)
+        if n == 1:   # a fill arrives while it's watching; the last line is still half-written
+            with open(tmp_path / "fills.csv", "a", encoding="utf-8") as f:
+                f.write("2026-10-06 03:30:00.000,APEX-0014,MNQ 12-26,-1,20000,x1,2026-10-06 12:30:00.000\n2026-10-06 03:3")
+        return n is None
+    follow(w, tmp_path, poll=0, stop=stop)
+    assert len(said) == 1 and said[0][1].startswith("Short 1 MNQ 12-26 at 20000")
+    assert ("APEX-0014", "MNQ 12-26") in w.open
