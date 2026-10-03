@@ -206,20 +206,23 @@ hr{border:0;border-top:1px solid #ccc;margin:16pt 0}"""
 
 BROWSERS = [r"C:\Program Files\Google\Chrome\Application\chrome.exe",
             r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
             "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"]
 
 
-def to_pdf(markdown_text: str, out_pdf) -> None:
-    """Render the report with a headless Chrome/Edge (no extra Python deps beyond `markdown`)."""
+def to_pdf(markdown_text: str, out_pdf, title: str = "Your Trading History, Audited") -> None:
+    """Render the report with a headless Chrome/Edge (no extra Python deps beyond `markdown`).
+    TILTCHECK_BROWSER points at a browser that isn't in the usual places."""
     import subprocess
     import tempfile
     from pathlib import Path
 
     import markdown
-    browser = next((b for b in BROWSERS if Path(b).exists()), None)
+    import os
+    browser = next((b for b in [os.environ.get("TILTCHECK_BROWSER", "")] + BROWSERS if b and Path(b).exists()), None)
     if not browser:
         raise RuntimeError("no Chrome or Edge found for PDF rendering")
-    html = (f'<!doctype html><html><head><meta charset="utf-8"><title>Your Trading History, Audited</title>'
+    html = (f'<!doctype html><html><head><meta charset="utf-8"><title>{title}</title>'
             f'<style>{PDF_CSS}</style></head><body>{markdown.markdown(markdown_text, extensions=["tables"])}</body></html>')
     with tempfile.TemporaryDirectory() as d:
         src = Path(d) / "report.html"
@@ -238,6 +241,20 @@ def three_numbers(trades: pd.DataFrame, pause: int = 15) -> str:
     L += ["", "**2. Your first trades of the day**", ""] + _first_trades(t)
     L += ["", "**3. After a loss**", ""] + after[4:]
     return "\n".join(L) + "\n"
+
+
+FULL_REPORT_URL = "https://ssap-pa.github.io/tilt-check/"
+
+
+def three_numbers_page(trades: pd.DataFrame, pause: int = 15) -> str:
+    """three_numbers with a title and a closing line, for the one-page PDF reply."""
+    t = trades.sort_values("entry_time")
+    first, last = t["entry_time"].min(), t["entry_time"].max()
+    span = f"{first:%b} {first.day} to {last:%b} {last.day}, {last.year}"     # no %-d: Windows strftime lacks it
+    return (f"# Your three numbers\n\n{span}, from your own export. Not advice: a description of what you did.\n\n"
+            + three_numbers(trades, pause)
+            + "\n---\n\nThe full report adds how you exit (replayed on minute bars), size, your written rules "
+              f"checked trade by trade, and what the data can't tell: {FULL_REPORT_URL}\n")
 
 
 def write_report(trades: pd.DataFrame, bars: dict | None = None, offset=None, pause: int = 15,
