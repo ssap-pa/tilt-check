@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your Trading History, Audited</title>
+<meta name="description" content="Send your NinjaTrader trade export. Within 48 hours you get a written report of your own numbers: sessions in New York time, first trades of the day, re-entries after a loss, size, exits, and your rules vs. your trades. Not advice.">
+<meta property="og:title" content="Your Trading History, Audited">
+<meta property="og:description" content="A written report from your own trades, in 48 hours. The sample is a real account.">
+<meta property="og:image" content="https://ssap-pa.github.io/tilt-check/card.png">
+<style>
+:root{--bg:#111;--fg:#eee;--mut:#9a9a9a;--y:#FFE600;--r:#FF3B00;--g:#7CFC9A}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 -apple-system,Segoe UI,Helvetica,Arial,sans-serif}
+.top{height:10px;background:var(--y)}main{max-width:760px;margin:0 auto;padding:40px 20px 80px}
+h1{font-size:44px;line-height:1.05;margin:0 0 8px}h1 span{color:var(--y)}h2{font-size:22px;margin:40px 0 10px}
+.lead{font-size:20px;color:#ddd;margin:14px 0 24px}.mut{color:var(--mut)}
+table{border-collapse:collapse;width:100%;margin:10px 0 6px}td{padding:8px 6px;border-bottom:1px solid #2a2a2a}td:last-child{text-align:right;font-weight:700}
+.neg{color:var(--r)}.pos{color:var(--g)}
+.btn{display:inline-block;background:var(--y);color:#111;font-weight:800;padding:14px 22px;border-radius:8px;text-decoration:none;font-size:18px}
+.btn.sec{background:transparent;color:var(--y);border:2px solid var(--y)}
+ul{padding-left:20px}li{margin:6px 0}.box{border:1px solid #333;border-radius:10px;padding:18px 20px;margin:18px 0}
+a{color:var(--y)}.small{font-size:14px;color:var(--mut)}
+</style>
+</head>
+<body><div class="top"></div>
+<main>
+<h1>Your trading history, <span>audited.</span></h1>
+<p class="lead">Send your NinjaTrader trade export. Within 48 hours you get a written report of what you actually did, in your own numbers. Not advice. Not signals. Your record, read back to you.</p>
+<p><a class="btn" href="https://payhip.com/order?link=BzSRC">Get your report, $149</a> &nbsp; <a class="btn sec" href="https://github.com/ssap-pa/tilt-check/blob/main/docs/sample-report.pdf">Read the sample first</a></p>
+<p class="small">Late means a full refund. Your files are deleted after delivery. The $149 plan is sold through my Payhip store and also includes my 151-page ebook on running a one-person business with AI agents.</p>
+
+<h2>From the sample report</h2>
+<p class="mut">One real prop-firm account, September 2026, shared with the trader's permission. 293 trades, +$1,832.87 net.</p>
+<table>
+<tr><td>Entries 1-5 each day (92 trades)</td><td class="neg">-$327.38</td></tr>
+<tr><td>Entry 6 onward (201 trades)</td><td class="pos">+$2,160.25</td></tr>
+<tr><td>Re-entry within 15 min of a losing exit (50 trades)</td><td class="neg">-$178.65</td></tr>
+<tr><td>Next entry after waiting 15 min (42 trades)</td><td class="pos">+$1,395.92</td></tr>
+<tr><td>NY open, 09:30-12:00 (71 trades)</td><td>+$8.11</td></tr>
+<tr><td>NY afternoon, 12:00-16:00 (114 trades)</td><td class="pos">+$1,167.35</td></tr>
+<tr><td>Her 15-min 200 MA rule, followed (58 trades)</td><td class="pos">+$66.87</td></tr>
+<tr><td>Same rule, broken (98 trades)</td><td class="neg">-$124.28</td></tr>
+</table>
+<p class="small">She knew she started slow. She didn't know it was $327 a month. She didn't know she'd broken her own trend rule 98 times.</p>
+
+<h2>What's in your report</h2>
+<ul>
+<li><b>When you trade, in market time.</b> Every window is a New York session with your local hours beside it. If you trade from another time zone, this alone is usually worth it.</li>
+<li><b>Your first trades of the day</b> vs. the rest.</li>
+<li><b>After a loss.</b> Does the next trade get worse? What did re-entering within 15 minutes cost you?</li>
+<li><b>Size.</b> Entries far above your usual size, and adds to losing positions, each one listed.</li>
+<li><b>How you exit.</b> Median winner and loser in points and minutes. With minute bars: a replay of your entries with fixed brackets, scored on trades the bracket never saw, against your own exits.</li>
+<li><b>Your written rules vs. your trades.</b> Trend filters, VWAP bands, your own list, checked against the chart as it stood at the moment of each click. No look-ahead.</li>
+<li><b>What the data can't tell you</b>, said plainly. A model is trained on your older trades and tested on newer ones; if it's a coin flip, the report says so.</li>
+</ul>
+
+<h2>How it works</h2>
+<div class="box">
+<ol>
+<li>Buy. You get a one-page PDF: how to export from NinjaTrader 8 (or any broker export with one row per trade), and where to send it.</li>
+<li>Reply to your receipt email with the file. Optional: 1-minute bars for the exit replay, and your rules in writing.</li>
+<li>Within 48 hours: your report as a PDF, usually 8-10 pages, plus one round of follow-up questions by email.</li>
+</ol>
+</div>
+
+<h2>Who writes it</h2>
+<p>I built <a href="https://github.com/ssap-pa/tilt-check">tilt-check</a>, the open-source tool this runs on, for my partner, who trades MNQ/MES/MGC on a prop account from Korea. The tool is free. What you're paying for is me running it on your data, checking every number against your fills, and writing it up in plain English. The method is public: <a href="https://dev.to/ssapable/i-built-my-partner-a-pre-trade-check-the-most-useful-thing-it-said-was-i-cant-tell-39lg">how it was built</a>, including the look-ahead bug that almost became the headline.</p>
+
+<h2>Not for you if</h2>
+<p>You want a strategy, a signal, or a prediction. Your history can't predict your next trade, and the report says so.</p>
+
+<p style="margin-top:36px"><a class="btn" href="https://payhip.com/order?link=BzSRC">Get your report, $149</a></p>
+<p class="small">Questions before buying: aipossiblee@gmail.com</p>
+</main>
+</body>
+</html>
