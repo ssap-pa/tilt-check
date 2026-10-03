@@ -49,11 +49,13 @@ def coach_note(facts_text: str, lang: str = "en") -> str:
                 "Quote the numbers exactly as given.")
 
 
-def parse_plan(text: str) -> dict:
-    """'short 2 MNQ right after a stop' -> {"instrument": "MNQ", "side": "short", "qty": 2}"""
+def parse_plan(text: str, known: list[str] | None = None) -> dict:
+    """'short 2 MNQ right after a stop' -> {"instrument": "MNQ", "side": "short", "qty": 2}
+    known: the instruments in the trader's own history, preferred when the note is vague ("gold")."""
+    hint = f" Prefer one of the instruments this trader actually trades: {', '.join(known)}." if known else ""
     out = chat("Extract the planned futures trade from the user's note. Reply with JSON only: "
-               '{"instrument": root symbol like MNQ, MES, MGC, MCL, "side": "long" or "short", "qty": integer}.',
-               text, temperature=0.0, fmt="json")
+               '{"instrument": root symbol like MNQ, MES, MGC, MCL, "side": "long" or "short", "qty": integer}.'
+               + hint, text, temperature=0.0, fmt="json")
     d = json.loads(out)
     d["instrument"] = re.sub(r"[^A-Z0-9]", "", str(d.get("instrument", "")).upper())
     d["side"] = "short" if str(d.get("side", "")).lower().startswith(("s", "매도", "숏")) else "long"

@@ -51,7 +51,7 @@ def cmd_report(args):
 def cmd_check(args):
     from .gemma import explain_check, parse_plan
     t = _history(args)
-    plan = parse_plan(args.plan) if not args.instrument else {
+    plan = parse_plan(args.plan, sorted(t["instrument"].unique())) if not args.instrument else {
         "instrument": args.instrument, "side": args.side, "qty": args.qty}
     now = pd.Timestamp(args.at) if args.at else pd.Timestamp.now().floor("s")
     # Only trades that had closed by `now` exist at that moment (matters when replaying with --at).
