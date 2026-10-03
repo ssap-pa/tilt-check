@@ -139,6 +139,8 @@ Sections: the period on one page, sessions in New York time, first trades of the
 
 ## Install
 
+한국어 설치 안내: [docs/INSTALL-ko.md](docs/INSTALL-ko.md)
+
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt   # Windows: .venv\Scripts\pip
 # GPU is optional; TabPFN runs on CPU for a few hundred trades.
