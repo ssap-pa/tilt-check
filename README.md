@@ -14,7 +14,7 @@ Her numbers, shared with her permission. One account, Sep 1 to Oct 2, 2026, Kore
 
 - 293 entries over 23 days, win rate 64.2%, net **+$1,832.87** after commissions. Average win $29.01, average loss $34.49.
 - Her **first 5 entries each day**: 92 trades, win rate 55.4%, net **-$327.38**. From the 6th entry on: 201 trades, 68.2%, **+$2,160.25**.
-- Entries between **12:00 and 14:59**: 17 trades, win rate 47.1%, net **-$306.01**.
+- Entries between **12:00 and 14:59 Korea time** (11 p.m. to 2 a.m. in New York): 17 trades, win rate 47.1%, net **-$306.01**.
 - And the part I didn't expect: TabPFN **can't tell her winners from her losers**. Trained on older trades and scored on newer ones it had never seen, it got AUC 0.42, 0.52, 0.48 and 0.55 on four walk-forward blocks (0.50 is a coin flip). So the check says that out loud instead of showing a confident percentage.
 
 ## The bug that almost became the headline
