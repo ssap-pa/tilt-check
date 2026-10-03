@@ -121,6 +121,8 @@ class Replay:
     bracket_test: float          # the picked bracket's net on the same trades
     in_sample: pd.DataFrame      # net $ for every bracket on the older trades (rows target, cols stop)
     sizes: dict                  # instrument -> (target pts, stop pts) for the picked bracket
+    test_diffs: list = None      # per newer trade: bracket $ minus her actual $
+    test_days: list = None       # the day of each newer trade (for block resampling)
 
 
 def replay(trades: pd.DataFrame, bars: dict, offset: pd.Timedelta, horizon: int = 120,
@@ -132,24 +134,48 @@ def replay(trades: pd.DataFrame, bars: dict, offset: pd.Timedelta, horizon: int 
     cut = int(len(idx) * train_share)
     train, test = idx[:cut], idx[cut:]
 
-    def net(ids, mt, ms):
-        total = 0.0
+    def per_trade(ids, mt, ms):
+        out = []
         for i in ids:
             r = t.loc[i]
             tick = TICK.get(r["instrument"], 0.01)
             pts = bracket(ps[i], _round(mt * unit[r["instrument"]], tick), _round(ms * unit[r["instrument"]], tick),
                           ties)
-            total += pts * pv[r["instrument"]] * r["qty"] - r["commission"]
-        return total
+            out.append(pts * pv[r["instrument"]] * r["qty"] - r["commission"])
+        return out
+
+    def net(ids, mt, ms):
+        return float(sum(per_trade(ids, mt, ms)))
 
     table = pd.DataFrame({ms: {mt: round(net(train, mt, ms), 2) for mt in MULTS} for ms in MULTS})
     mt, ms = table.stack().idxmax()
     sizes = {k: (_round(mt * unit[k], TICK.get(k, 0.01)), _round(ms * unit[k], TICK.get(k, 0.01)))
              for k in sorted({t.loc[i, "instrument"] for i in idx})}
+    test_pnl = per_trade(test, mt, ms)
+    diffs = [b - float(t.loc[i, "profit"]) for i, b in zip(test, test_pnl)]
     return Replay(covered=len(idx), total=len(t), offset=offset, train=len(train), test=len(test),
                   best=(mt, ms), actual_train=round(float(t.loc[train, "profit"].sum()), 2),
                   actual_test=round(float(t.loc[test, "profit"].sum()), 2),
-                  bracket_test=round(net(test, mt, ms), 2), in_sample=table, sizes=sizes)
+                  bracket_test=round(float(sum(test_pnl)), 2), in_sample=table, sizes=sizes,
+                  test_diffs=diffs, test_days=[t.loc[i, "entry_time"].date() for i in test])
+
+
+def bracket_vs_exits_share(diffs: list, days: list, n: int = 1000, seed: int = 0) -> float:
+    """How often the bracket beats her exits when the holdout is resampled by day (block bootstrap).
+    Trades on one day move together, so days are the unit, not trades. 0.5 = a coin flip."""
+    import numpy as np
+    by_day = {}
+    for d, x in zip(days, diffs):
+        by_day[d] = by_day.get(d, 0.0) + x
+    totals = np.array(list(by_day.values()))
+    if len(totals) < 5:
+        return float("nan")
+    rng = np.random.default_rng(seed)
+    wins = 0
+    for _ in range(n):
+        if rng.choice(totals, size=len(totals), replace=True).sum() > 0:
+            wins += 1
+    return wins / n
 
 
 def excursions(trades: pd.DataFrame, bars: dict, offset: pd.Timedelta, minutes: int = 30) -> pd.DataFrame:

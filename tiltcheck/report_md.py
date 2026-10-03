@@ -109,9 +109,16 @@ def _exits(t: pd.DataFrame, bars, offset) -> list[str]:
                 e = ex.loc[g.index]
                 lines.append(f"- {inst}: in the 30 minutes after an entry, price typically went {e['mfe'].median():g} points "
                              f"your way and {e['mae'].median():g} against (medians, {len(g)} entries).")
+    from .exits import bracket_vs_exits_share
+    share = bracket_vs_exits_share(r.test_diffs, r.test_days)
+    if share == share:  # not NaN
+        lines.append(f"- Resampling the newer trades by day 1,000 times, the bracket came out ahead of your exits in "
+                     f"{share:.0%} of resamples (50% would be a coin flip).")
     verdict = ("Your exits beat the fitted bracket out of sample, so this report does not hand you a take-profit number."
                if r.actual_test >= r.bracket_test else
                "The fitted bracket beat your exits out of sample. One month is a small test; worth re-running next month before changing anything.")
+    if share == share and 0.35 < share < 0.65:
+        verdict += " The resample says the difference is inside the noise for now."
     lines += ["", verdict]
     return lines
 
