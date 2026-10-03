@@ -23,7 +23,7 @@ Two options, in order of preference:
 
 ## Status (Oct 4)
 
-- Step 1 drafted: `ninjatrader/TiltCheckBars.cs` (BarsRequest per instrument listed in `Documents	ilt-checkars-watch.txt`, closed bars appended to `Documents	ilt-checkars\<instrument>.csv`). Not yet compiled in a real NinjaTrader.
+- Step 1 drafted: `ninjatrader/TiltCheckBars.cs` (BarsRequest per instrument listed in `Documents\tilt-check\bars-watch.txt`, closed bars appended to `Documents\tilt-check\bars\<instrument>.csv`). Not yet compiled in a real NinjaTrader.
 - Step 3 done: `Watcher._chart` + the three rule keys, `watch --bars`. Bars are loaded once at start; live re-reading of the bars folder (step 2) is next.
 
 ## Order of work
