@@ -1,0 +1,5 @@
+numpy<2.4
+pandas>=2.0
+scikit-learn>=1.3
+tabpfn==2.2.1
+pytest

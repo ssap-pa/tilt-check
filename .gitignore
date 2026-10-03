@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.csv
+!sample/trades_sample.csv
+.tilt-check/
