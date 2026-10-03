@@ -98,7 +98,7 @@ Setup: copy `ninjatrader/TiltCheckFeed.cs` to `Documents\NinjaTrader 8\bin\Custo
 python -m tiltcheck watch --csv trades.csv --account 0014
 ```
 
-Rules are optional. Hers, after she answered a few questions (the 15-minute pause came from her own numbers: re-entries within 15 minutes of a losing exit made -$178.65 over 50 trades, waiting longer made +$1,395.92 over 42):
+Rules are optional. An example (the 15-minute pause comes from her own numbers: re-entries within 15 minutes of a losing exit made -$178.65 over 50 trades, waiting longer made +$1,395.92 over 42):
 
 ```json
 {"max_contracts_by_class": {"micro": 20, "mini": 2}, "risk_per_trade_pct": 1, "daily_loss_limit_pct": 1,
