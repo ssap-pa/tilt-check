@@ -156,6 +156,54 @@ def _rules(t: pd.DataFrame, bars, offset, vwap_sd: float) -> list[str]:
     return lines
 
 
+def rule_flags(t: pd.DataFrame, rules: dict) -> dict[str, pd.Series]:
+    """The rules.json limits that can be checked from the trades alone, one True/False
+    per entry (True = followed). t must already have add_features columns."""
+    from .sessions import session_of
+    from .watch import contract_class
+    out = {}
+    if rules.get("max_trades_per_day"):
+        k = int(rules["max_trades_per_day"])
+        out[f"at most {k} trades a day"] = t["trades_today"] < k
+    if rules.get("daily_loss_limit_usd"):
+        lim = float(rules["daily_loss_limit_usd"])
+        out[f"stop for the day at -${lim:,.0f}"] = t["pnl_today"] > -lim
+    if rules.get("pause_after_loss_minutes"):
+        m = rules["pause_after_loss_minutes"]
+        after = t["prev_win"] == 0
+        out[f"wait {m:g} min after a losing exit"] = (t["minutes_since_exit"] >= m)[after]
+    if rules.get("pause_after_losses_in_a_row"):
+        k, m = int(rules["pause_after_losses_in_a_row"]), rules.get("pause_minutes") or 15
+        hit = t["losses_in_a_row"] >= k
+        out[f"wait {m:g} min after {k} losses in a row"] = (t["minutes_since_exit"] >= m)[hit]
+    caps = dict(rules.get("max_contracts_by_class") or {})
+    for cls in ("micro", "mini"):
+        if caps.get(cls):
+            mine = t["instrument"].map(contract_class) == cls
+            out[f"at most {caps[cls]} {cls} contracts per entry"] = (t["qty"] <= caps[cls])[mine]
+    if rules.get("max_contracts"):
+        out[f"at most {rules['max_contracts']} contracts per entry"] = t["qty"] <= rules["max_contracts"]
+    avoid = list(rules.get("avoid_sessions") or [])
+    if avoid:
+        out["no entries in " + ", ".join(avoid)] = ~session_of(t["entry_time"]).isin(avoid)
+    return {k: v for k, v in out.items() if len(v)}
+
+
+def _rules_you_sent(t: pd.DataFrame, rules: dict | None) -> list[str]:
+    fl = rule_flags(t, rules or {})
+    if not fl:
+        return []
+    lines = ["**The rules you sent**, checked against every entry they apply to:", "",
+             "| Rule | Followed | Trades | Win rate | Net |", "|---|---|---|---|---|"]
+    for name, ok in fl.items():
+        for flag, word in ((True, "yes"), (False, "no")):
+            g = t.loc[ok.index[ok == flag]]
+            n, wr, net = _grp(g)
+            lines.append(f"| {name} | {word} | {n} | {wr:.1%} | {_money(net)}{' (small sample)' if 0 < n < 20 else ''} |"
+                         if n else f"| {name} | {word} | 0 | | |")
+    return lines + [""]
+
+
 def _model(t: pd.DataFrame) -> list[str]:
     try:
         ev, _ = walk_forward(t)
@@ -241,7 +289,7 @@ def three_numbers(trades: pd.DataFrame, pause: int = 15) -> str:
 
 
 def write_report(trades: pd.DataFrame, bars: dict | None = None, offset=None, pause: int = 15,
-                 vwap_sd: float = 1.0, who: str = "you") -> str:
+                 vwap_sd: float = 1.0, who: str = "you", rules: dict | None = None) -> str:
     t = add_features(trades)
     n, wr, net = _grp(t)
     days = t["day"].nunique()
@@ -274,7 +322,7 @@ def write_report(trades: pd.DataFrame, bars: dict | None = None, offset=None, pa
         L += ["", f"The {pause} minutes after a losing exit have a price tag in your record: about ${snet - qnet:,.0f} between those two rows."]
     L += ["", "## 5. Size", ""] + _size(t)
     L += ["", "## 6. How you exit", ""] + _exits(t, bars, offset)
-    L += ["", "## 7. Your rules vs. your trades", ""] + _rules(t, bars, offset, vwap_sd)
+    L += ["", "## 7. Your rules vs. your trades", ""] + _rules_you_sent(t, rules) + _rules(t, bars, offset, vwap_sd)
     L += ["", "## 8. What the data can't tell you", ""] + _model(t)
     hl = _highlights(t, pause)
     if hl:
