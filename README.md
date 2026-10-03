@@ -8,6 +8,8 @@ A pre-trade check for futures traders that learns from your own NinjaTrader hist
 
 I built it for my partner, who trades micro futures (MNQ, MES, MGC) on a prop-firm account and kept asking the same question after a bad session: *is this one of my good trades or one of my bad ones?*
 
+> Want this run on your own export and written up? [Your Trading History, Audited](https://ssap-pa.github.io/tilt-check/): a written report within 48 hours, late means a full refund. The sample is one real account.
+
 ## What it said about her account
 
 Her numbers, shared with her permission. One account, Sep 1 to Oct 2, 2026:
