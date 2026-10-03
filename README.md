@@ -76,7 +76,7 @@ On her account, with public 1-minute futures bars (Yahoo Finance) until her own 
 
 - Picked on her older 163 trades, the best bracket was the widest one tried: target and stop at 3x her usual move (MNQ +26.25/-26.25). On those same trades it made $985.27 to her $645.27. That's what fitting does.
 - On her newer 70 trades, which it hadn't seen, it **lost $75.54. Her own exits made +$176.46.** Same answer whichever way the both-levels-in-one-bar case is counted.
-- A stop at half her usual move (4.5 points on MNQ) lost money with every target. In the 30 minutes after an MNQ entry, price typically went 18.75 points her way and 23.25 against (medians), so that stop sits well inside the normal swing.
+- On her older trades, a stop at half her usual move (4.5 points on MNQ) lost money with every target. In the 30 minutes after an MNQ entry, price typically went 18.75 points her way and 23.25 against (medians), so that stop sits well inside the normal swing.
 
 So the check doesn't print a take-profit number. The replay is there to look at.
 
