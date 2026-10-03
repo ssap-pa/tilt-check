@@ -19,6 +19,7 @@ from . import journal
 from .features import describe_row, planned_row, similar_trades
 from .model import reliability, walk_forward, win_probability
 from .ninjatrader import load_trades
+from .sessions import session_of
 
 
 def _history(args) -> pd.DataFrame:
@@ -61,7 +62,8 @@ def cmd_check(args):
     auc = reliability(t)
     base = float((t["profit"] > 0).mean())
     sim = similar_trades(t, row)
-    sim_text = "\n".join(f"- {r.entry_time:%m-%d %H:%M} {r.side} {r.qty} {r.instrument}: "
+    sim = sim.assign(session=session_of(sim["entry_time"]))
+    sim_text = "\n".join(f"- {r.entry_time:%m-%d %H:%M} ({r.session}) {r.side} {r.qty} {r.instrument}: "
                          f"{'won' if r.profit > 0 else 'lost'} ${r.profit:,.2f} "
                          f"(trade #{int(r.trades_today) + 1} that day)" for r in sim.itertuples())
     hits = F.applicable(t, row.iloc[0])

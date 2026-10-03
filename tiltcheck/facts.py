@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from .features import add_features
+from .sessions import REGULAR, SESSIONS, in_window, label
 
 
 def _row(name: str, g: pd.DataFrame, overall_wr: float) -> dict:
@@ -43,10 +44,11 @@ def facts(trades: pd.DataFrame) -> dict:
     for inst, g in t.groupby("instrument"):
         if len(g) >= 10:
             groups.append((f"{inst}", g))
-    for h0 in range(0, 24, 3):
-        g = t[(t["hour"] >= h0) & (t["hour"] < h0 + 3)]
+    last_day = t["entry_time"].max()
+    for name, start, end in [REGULAR] + SESSIONS:
+        g = t[in_window(t["entry_time"], start, end)]
         if len(g) >= 10:
-            groups.append((f"entries {h0:02d}:00-{h0 + 2:02d}:59 (PC time)", g))
+            groups.append((label(name, start, end, last_day), g))
     rows = [_row(name, g, wr) for name, g in groups if len(g)]
     rows.sort(key=lambda r: abs(r["lift"]), reverse=True)
     return {"overall": overall, "groups": rows}
@@ -56,7 +58,10 @@ def applicable(trades: pd.DataFrame, row: pd.Series) -> list[dict]:
     """The groups from history that the planned trade falls into, with their numbers."""
     t = add_features(trades)
     wr = float(t["win"].mean())
-    h0 = int(row["hour"]) // 3 * 3
+    when = pd.Series([row["entry_time"]])
+    sessions = [(n, a, b) for n, a, b in SESSIONS if in_window(when, a, b).iloc[0]]
+    if in_window(when, REGULAR[1], REGULAR[2]).iloc[0]:
+        sessions.insert(0, REGULAR)
     checks = [
         (f"trade #{int(row['trades_today']) + 1} of the day (your first 5 trades each day)",
          row["trades_today"] < 5, t[t["trades_today"] < 5]),
@@ -65,7 +70,7 @@ def applicable(trades: pd.DataFrame, row: pd.Series) -> list[dict]:
         ("after 2+ losses in a row", row["losses_in_a_row"] >= 2, t[t["losses_in_a_row"] >= 2]),
         ("while already down for the day", row["pnl_today"] < 0, t[t["pnl_today"] < 0]),
         ("bigger size than usual", row["size_vs_usual"] > 1.0, t[t["size_vs_usual"] > 1.0]),
-        (f"entries {h0:02d}:00-{h0 + 2:02d}:59 (PC time)", True, t[(t["hour"] >= h0) & (t["hour"] < h0 + 3)]),
+        *[(label(n, a, b, row["entry_time"]), True, t[in_window(t["entry_time"], a, b)]) for n, a, b in sessions],
         (f"{row['instrument']} {row['side']}", True,
          t[(t["instrument"] == row["instrument"]) & (t["side"] == row["side"])]),
     ]

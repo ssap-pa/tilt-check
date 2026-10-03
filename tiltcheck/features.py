@@ -8,6 +8,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from .sessions import session_of
+
 # Column order matters: TabPFN gets a plain matrix plus the indices of categorical columns.
 FEATURES = [
     "instrument",            # categorical
@@ -100,11 +102,14 @@ def planned_row(history: pd.DataFrame, instrument: str, side: str, qty: int, whe
         "losses_in_a_row": streak,
         "trades_today": len(today),
         "pnl_today": float(today["profit"].sum()) if len(today) else 0.0,
+        "entry_time": when,                  # not a model feature; used for New York session labels
     }])
 
 
 def describe_row(row: pd.Series) -> str:
-    return (f"{row['side']} {int(row['qty'])} {row['instrument']} at {int(row['hour']):02d}h {row['weekday']}, "
+    ny = session_of(pd.Series([row["entry_time"]])).iloc[0] if "entry_time" in row else ""
+    return (f"{row['side']} {int(row['qty'])} {row['instrument']} at {int(row['hour']):02d}h {row['weekday']}"
+            f"{f' ({ny})' if ny else ''}, "
             f"{int(row['losses_in_a_row'])} loss(es) in a row before, {int(row['trades_today'])} trade(s) earlier today, "
             f"today P&L ${row['pnl_today']:.0f}, {row['minutes_since_exit']:.0f} min since last exit")
 

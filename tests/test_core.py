@@ -6,6 +6,7 @@ import pandas as pd
 from tiltcheck.facts import applicable, facts
 from tiltcheck.features import add_features, planned_row
 from tiltcheck.ninjatrader import load_trades
+from tiltcheck.sessions import label, session_of
 
 KO = """거래 번호,종목,계좌,전략,매매구분,수량,진입가,청산가격,진입시간,청산시간,진입구분,청산이름,익절,누적. 순이익,수수료,MAE,MFE,ETD,캔들
 1,MNQ SEP26,APEX-0014,,매수,1,100,110,2026-09-01 오후 10:00:00,2026-09-01 오후 10:05:00,,,$20.00,$20.00,$1.04,$0,$20,$0,0
@@ -67,3 +68,18 @@ def test_sample_file_loads():
     t = load_trades(p)
     assert len(t) > 150
     assert (t["rows"] > 1).any()                 # the sample includes scaled-out entries
+
+
+def test_new_york_sessions_from_korean_pc_clock(tmp_path, monkeypatch):
+    monkeypatch.setenv("TILTCHECK_TZ", "Asia/Seoul")
+    t = _load(tmp_path, KO, account="0014")
+    s = dict(zip(t["entry_time"].dt.strftime("%H:%M"), session_of(t["entry_time"])))
+    assert s["22:00"] == "before the NY open"        # 9:00 a.m. in New York (EDT)
+    assert s["22:30"] == "NY open"                   # 9:30 a.m.
+    # Korean lunchtime is the middle of the night in New York, not the main session
+    assert session_of(pd.Series([pd.Timestamp("2026-10-02 13:05")])).iloc[0] == "NY overnight"
+    assert label("NY overnight", 23 * 60, 2 * 60, "2026-10-02") == \
+        "NY overnight 23:00-02:00 New York (12:00-15:00 on this PC)"
+    # after daylight saving ends, the same session sits an hour later on a Korean clock
+    assert label("NY open", 9 * 60 + 30, 12 * 60, "2026-11-10") == \
+        "NY open 09:30-12:00 New York (23:30-02:00 on this PC)"

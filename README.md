@@ -10,11 +10,12 @@ I built it for my partner, who trades micro futures (MNQ, MES, MGC) on a prop-fi
 
 ## What it said about her account
 
-Her numbers, shared with her permission. One account, Sep 1 to Oct 2, 2026, Korea time:
+Her numbers, shared with her permission. One account, Sep 1 to Oct 2, 2026:
 
 - 293 entries over 23 days, win rate 64.2%, net **+$1,832.87** after commissions. Average win $29.01, average loss $34.49.
 - Her **first 5 entries each day**: 92 trades, win rate 55.4%, net **-$327.38**. From the 6th entry on: 201 trades, 68.2%, **+$2,160.25**.
-- Entries between **12:00 and 14:59 Korea time** (11 p.m. to 2 a.m. in New York): 17 trades, win rate 47.1%, net **-$306.01**.
+- By New York session: the regular session (9:30 a.m. to 4 p.m.) made +$1,175.46 over 185 trades, but almost none of it in the morning. **9:30 to noon: 71 trades, +$8.11.** Noon to 4 p.m.: 114 trades, 64.9%, +$1,167.35.
+- **11 p.m. to 2 a.m. in New York** (noon to 3 p.m. in Korea): 17 trades, win rate 47.1%, net **-$306.01**. Before the New York open (5 to 9:30 a.m.): 36 trades, 77.8%, +$499.23.
 - And the part I didn't expect: TabPFN **can't tell her winners from her losers**. Trained on older trades and scored on newer ones it had never seen, it got AUC 0.42, 0.52, 0.48 and 0.55 on four walk-forward blocks (0.50 is a coin flip). So the check says that out loud instead of showing a confident percentage.
 
 ## The bug that almost became the headline
@@ -23,34 +24,37 @@ My first version said she falls apart after a losing trade: 74% win rate after a
 
 NinjaTrader writes one row per exit, so a scaled-out entry becomes several rows, and her trades overlap. Computing "was the previous trade a loss?" from the previous *row* let a trade peek at a result that hadn't happened yet. Once every feature is computed only from trades that had **already closed** when she clicked, the gap disappears: right after a loss she won 65.2% (92 trades, +$1,217.08). There's a test for this now (`test_no_look_ahead_on_overlapping_trades`).
 
+## Time is New York time
+
+NinjaTrader exports use the PC's clock. On a Korean PC, a window like "12:00-14:59" is easy to read as the New York session, but it's actually 11 p.m. to 2 a.m. in New York. So every time window tilt-check prints is a New York session (NY open, NY afternoon, before the NY open, Europe open, NY overnight, after the NY close) with the PC hours next to it, and daylight saving is handled. Set `TILTCHECK_TZ` (for example `Asia/Seoul` or `America/Chicago`) if your PC's zone observes daylight saving and you're importing trades from both sides of the switch.
+
 ## What a check looks like
 
 ```text
 $ python -m tiltcheck check "short 2 MNQ" --at "2026-10-02 13:05"   # replaying a real moment
 
-Plan: short 2 MNQ at 13h Fri, 5 loss(es) in a row before, 0 trade(s) earlier today, today P&L $0, 1334 min since last exit
+Plan: short 2 MNQ at 13h Fri (NY overnight), 5 loss(es) in a row before, 0 trade(s) earlier today, today P&L $0, 1334 min since last exit
 
 What your own history says about trades like this:
 - trade #1 of the day (your first 5 trades each day): 91 trades, win rate 54.9%, net $-353.04
 - right after a losing trade: 90 trades, win rate 64.4%, net $1,179.90
 - after 2+ losses in a row: 37 trades, win rate 62.2%, net $533.82
 - bigger size than usual: 26 trades, win rate 61.5%, net $816.31
-- entries 12:00-14:59 (PC time): 17 trades, win rate 47.1%, net $-306.01
+- NY overnight 23:00-02:00 New York (12:00-15:00 on this PC): 17 trades, win rate 47.1%, net $-306.01
 - MNQ short: 128 trades, win rate 61.7%, net $182.20
 
 Model check: on trades it had not seen, TabPFN scored AUC 0.50 (0.50 = coin flip). Your history can't tell winners from losers yet, so the 65% below is shown for the log only.
 TabPFN chance this ends green: 65% (your usual: 64%)
 Closest past trades:
-- 09-15 02:21 short 1 MNQ: won $3.96 (trade #1 that day)
-- 10-01 14:29 short 1 MNQ: lost $-29.54 (trade #13 that day)
-- 10-01 14:19 short 1 MNQ: lost $-96.04 (trade #12 that day)
-- 09-17 23:35 short 1 MNQ: won $48.46 (trade #6 that day)
-- 09-05 02:14 short 1 MNQ: won $5.96 (trade #13 that day)
+- 09-15 02:21 (NY afternoon) short 1 MNQ: won $3.96 (trade #1 that day)
+- 10-01 14:29 (NY overnight) short 1 MNQ: lost $-29.54 (trade #13 that day)
+- 10-01 14:19 (NY overnight) short 1 MNQ: lost $-96.04 (trade #12 that day)
+- 09-17 23:35 (NY open) short 1 MNQ: won $48.46 (trade #6 that day)
+- 09-05 02:14 (NY afternoon) short 1 MNQ: won $5.96 (trade #13 that day)
 
-Your entries between 12:00-14:59 have a win rate of 47.1%, compared to your overall 64%.
-The group "right after a losing trade" shows a win rate of 64.4% with a net of $1,179.90.
-Given you have had 5 losses in a row, how will you manage the size of this trade? 
-
+The NY overnight 23:00-02:00 New York group has a 47.1% win rate, compared to your overall 64%.
+The right after a losing trade group shows a 64.4% win rate with a net of $1,179.90.
+Given you have 5 loss(es) in a row, how does that influence your sizing for this trade?
 
 take / skip / wait?  skip
 why (one line)?  first trade of the day, lunch window
