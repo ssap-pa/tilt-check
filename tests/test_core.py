@@ -207,3 +207,29 @@ def test_indicators_use_only_closed_bars_and_fvg_first_touch(tmp_path, monkeypat
     assert bool(ind.loc[0, "fvg_first_touch"])
     # the value used at 10:16:30 is the bar that closed at 01:16 UTC, not anything later
     assert ind.loc[0, "price_before"] == 104.0
+
+
+def test_watch_prop_limits_pause_daily_pct_and_stop_risk(monkeypatch):
+    monkeypatch.setenv("TILTCHECK_TZ", "Asia/Seoul")
+    w, said = _watcher({"max_contracts_by_class": {"micro": 20, "mini": 2}, "pause_after_loss_minutes": 15,
+                        "daily_loss_limit_pct": 1, "risk_per_trade_pct": 1})
+    t0 = pd.Timestamp("2026-10-06 22:40:00")
+    w.on_snapshot(t0, "APEX-0014", 0.0, 50000.0)                          # $50k account -> 1% = $500
+    w.on_fill(t0, "APEX-0014", "NQ 12-26", 3, 20000.0)                    # 3 minis, max 2
+    assert "3 mini contracts, your max is 2" in said[-1][1]
+    w.on_fill(t0 + pd.Timedelta(minutes=1), "APEX-0014", "NQ 12-26", -3, 19990.0)   # -10 pts x 3 x $20 = -$600 loss
+    assert "1% daily limit ($500.00)" in said[-1][1] and "next entry after 22:56" in said[-1][1]
+    w.on_fill(t0 + pd.Timedelta(minutes=5), "APEX-0014", "MNQ 12-26", 1, 20000.0)  # 4 min after a loss
+    assert "4 min after a losing exit, your pause is 15 min" in said[-1][1]
+    # stop checks: an order feed exists, the entry gets a stop that risks more than 1%
+    w.on_order(t0, "APEX-0014", "MNQ 12-26", "s1", "Sell", "StopMarket", "Working", 1, 19700.0)  # 300 pts x $2 = $600
+    w.on_fill(t0 + pd.Timedelta(minutes=6), "APEX-0014", "MNQ 12-26", -1, 20001.0)  # flat
+    w.on_order(t0, "APEX-0014", "MNQ 12-26", "s1", "Sell", "StopMarket", "Cancelled", 1, 19700.0)
+    w.on_fill(t0 + pd.Timedelta(minutes=30), "APEX-0014", "MNQ 12-26", 1, 20000.0)  # new long, stop check scheduled
+    w.on_order(t0 + pd.Timedelta(minutes=30), "APEX-0014", "MNQ 12-26", "s2", "Sell", "StopMarket", "Working", 1, 19700.0)
+    w.tick(t0 + pd.Timedelta(minutes=31))
+    assert said[-1][0] == "tilt-check: check this one" and "stop risk $600.00 = 1.2%" in said[-1][1]
+    w.on_order(t0, "APEX-0014", "MNQ 12-26", "s2", "Sell", "StopMarket", "Cancelled", 1, 19700.0)
+    w.pending.append((t0, ("APEX-0014", "MNQ 12-26")))
+    w.tick(t0 + pd.Timedelta(minutes=32))
+    assert said[-1][0] == "tilt-check: no stop"

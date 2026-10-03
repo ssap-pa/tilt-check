@@ -66,7 +66,8 @@ Every check is logged with her decision and reason. `learn` imports the next exp
 
 Typing the trade before every click is friction, and the moments that matter are the ones when nobody stops to type. So there's a second way in. A tiny NinjaTrader add-on (`ninjatrader/TiltCheckFeed.cs`) writes every fill to `Documents\tilt-check\fills.csv`, plus the account's open P&L every 2 seconds while a position is open. `watch` follows those files and raises a Windows notification (it doesn't steal the keyboard focus, and it beeps when something's wrong):
 
-- **her own rules** from `~/.tilt-check/rules.json`: trades per day, daily loss limit, pause after N losses in a row, max contracts, sessions to avoid
+- **her own rules** from `~/.tilt-check/rules.json`: prop-firm contract caps (micros and minis separately), daily loss limit (in $ or as % of the account, read from NinjaTrader), risk per entry as % of the account (from the stop orders it sees), a pause after a losing exit, trades per day, sessions to avoid
+- **no stop**: an entry without a working stop order after 20 seconds, when she has a risk-per-entry rule
 - **adding to a loser**: another contract in the same direction while the position is under water
 - **size**: an entry three or more times her usual size
 - **red zones** from her history: a group she's in right now that sits well below her usual win rate, with a net loss, over enough trades (a group she already knows about can be muted)
@@ -97,11 +98,11 @@ Setup: copy `ninjatrader/TiltCheckFeed.cs` to `Documents\NinjaTrader 8\bin\Custo
 python -m tiltcheck watch --csv trades.csv --account 0014
 ```
 
-Rules are optional. An example `rules.json`:
+Rules are optional. Hers, after she answered a few questions (the 15-minute pause came from her own numbers: re-entries within 15 minutes of a losing exit made -$178.65 over 50 trades, waiting longer made +$1,395.92 over 42):
 
 ```json
-{"max_trades_per_day": 15, "daily_loss_limit_usd": 300, "pause_after_losses_in_a_row": 3,
- "pause_minutes": 15, "max_contracts": 2, "avoid_sessions": ["NY overnight"], "mute": ["your first 5 trades"]}
+{"max_contracts_by_class": {"micro": 20, "mini": 2}, "risk_per_trade_pct": 1, "daily_loss_limit_pct": 1,
+ "pause_after_loss_minutes": 15, "mute": ["your first 5 trades"]}
 ```
 
 ## Where to close

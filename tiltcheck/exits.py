@@ -25,6 +25,9 @@ from .bars import contract_key, inside
 TICK = {"MNQ": 0.25, "NQ": 0.25, "MES": 0.25, "ES": 0.25, "M2K": 0.1, "RTY": 0.1, "MYM": 1.0, "YM": 1.0,
         "MGC": 0.1, "GC": 0.1, "MCL": 0.01, "CL": 0.01}
 MULTS = [0.5, 0.75, 1.0, 1.5, 2.0, 3.0]          # bracket sizes, in units of her usual move
+# $ per point per contract (CME/COMEX/NYMEX), for instruments her history hasn't seen yet
+POINT_VALUE = {"MNQ": 2, "NQ": 20, "MES": 5, "ES": 50, "MYM": 0.5, "YM": 5, "M2K": 5, "RTY": 50,
+               "MGC": 10, "GC": 100, "MCL": 100, "CL": 1000, "SIL": 1000, "SI": 5000, "MHG": 2500, "HG": 25000}
 
 
 def points(trades: pd.DataFrame) -> pd.Series:

@@ -28,7 +28,7 @@ import numpy as np
 import pandas as pd
 
 from . import facts as F
-from .exits import point_values, points
+from .exits import POINT_VALUE, point_values, points
 from .features import planned_row
 from .sessions import pc_zone, session_of
 
@@ -38,6 +38,11 @@ DEFAULT_RULES = {
     "pause_after_losses_in_a_row": None,
     "pause_minutes": 15,
     "max_contracts": None,
+    "max_contracts_by_class": {"micro": None, "mini": None},   # prop rules, e.g. 20 micros or 2 minis
+    "pause_after_loss_minutes": None,  # no new entry this soon after a losing exit
+    "daily_loss_limit_pct": None,    # % of the account's cash value at the start of the day
+    "risk_per_trade_pct": None,      # stop distance x size, as % of the account (needs the add-on's orders.csv)
+    "stop_grace_seconds": 20,        # how long after an entry the stop has to show up
     "warn_adding_to_loser": True,    # adding to a position that's under water
     "size_alert_multiple": 3,        # an entry this many times her usual size
     "avoid_sessions": [],            # e.g. ["NY overnight"]
@@ -59,6 +64,16 @@ def documents_dir() -> Path:
         except Exception:
             pass
     return Path.home() / "Documents"
+
+
+MICRO = {"MNQ", "MES", "MYM", "M2K", "MGC", "MCL", "SIL", "MHG", "MBT", "MET", "M6E", "M6A", "M6B", "MJY", "MNG"}
+
+
+def contract_class(instrument: str) -> str:
+    return "micro" if instrument in MICRO else "mini"
+
+
+ACTIVE_ORDER = {"Accepted", "Working", "Submitted", "ChangePending", "ChangeSubmitted", "TriggerPending"}
 
 
 def _px(x: float) -> str:
@@ -124,10 +139,24 @@ class Watcher:
     alert: callable = desktop_alert
     open: dict = field(default_factory=dict)
     today: list = field(default_factory=list)
+    cash: dict = field(default_factory=dict)          # account -> latest cash value
+    day_cash: dict = field(default_factory=dict)      # (account, date) -> first cash value seen that day
+    orders: dict = field(default_factory=dict)        # order id -> latest state
+    pending: list = field(default_factory=list)       # (due time, position key) stop checks
+    orders_seen: bool = False
 
     def __post_init__(self):
         h = self.history
-        self.pv = point_values(h)
+        self.pv = {**POINT_VALUE, **point_values(h)}
+        # what happened when she re-entered soon after a losing exit, for the pause rule's message
+        self.pause_stats = None
+        n = self.rules.get("pause_after_loss_minutes")
+        if n and len(h):
+            from .features import add_features
+            f = add_features(h)
+            after = f[f["prev_win"] == 0]
+            soon, later = after[after["minutes_since_exit"] < n], after[after["minutes_since_exit"] >= n]
+            self.pause_stats = (len(soon), float(soon["profit"].sum()), len(later), float(later["profit"].sum()))
         one = h[h.get("rows", 1) == 1].copy()
         one["pts"] = points(one)
         self.usual = {}
@@ -153,6 +182,16 @@ class Watcher:
             streak += 1
         return len(done), sum(t["profit"] for t in done), streak, (max(t["exit_time"] for t in done) if done else None)
 
+    def _last_closed(self, when: pd.Timestamp):
+        done = [t for t in self.today if t["exit_time"] <= when]
+        return max(done, key=lambda t: t["exit_time"]) if done else None
+
+    def _day_limit(self, account: str, when: pd.Timestamp):
+        """Daily loss limit in $ from the rule's % and the day's first cash value, if both are known."""
+        pct = self.rules.get("daily_loss_limit_pct")
+        start = self.day_cash.get((account, when.date()))
+        return pct / 100 * start if pct and start else None
+
     # ---- events ------------------------------------------------------------------------------
     def on_fill(self, when: pd.Timestamp, account: str, contract: str, signed_qty: int, price: float, quiet=False):
         key = (account, contract)
@@ -163,6 +202,8 @@ class Watcher:
             self.open[key] = pos
             if not quiet:
                 self._entry(pos)
+                if self.rules.get("risk_per_trade_pct") and self.orders_seen:
+                    self.pending.append((when + pd.Timedelta(seconds=self.rules["stop_grace_seconds"]), key))
             return
         if np.sign(signed_qty) == np.sign(pos.qty):           # adding to it
             under = (price - pos.price) * np.sign(pos.qty)       # points the position is up (+) or down (-)
@@ -185,7 +226,44 @@ class Watcher:
             if left:
                 self.on_fill(when, account, contract, int(np.sign(signed_qty)) * left, price, quiet)
 
-    def on_snapshot(self, when: pd.Timestamp, account: str, unrealized: float):
+    def on_order(self, when: pd.Timestamp, account: str, contract: str, order_id: str, action: str, otype: str,
+                 state: str, qty: int, stop: float):
+        self.orders_seen = True
+        self.orders[order_id] = {"account": account, "contract": contract, "action": action, "type": otype,
+                                 "state": state, "qty": qty, "stop": stop}
+
+    def tick(self, now: pd.Timestamp):
+        """Run the stop checks that are due."""
+        due = [p for p in self.pending if p[0] <= now]
+        self.pending = [p for p in self.pending if p[0] > now]
+        for _, key in due:
+            self._risk_check(key)
+
+    def _risk_check(self, key):
+        pos = self.open.get(key)
+        if pos is None:
+            return
+        protective = "Sell" if pos.qty > 0 else "Buy"        # Sell stops protect a long; Buy/BuyToCover a short
+        stops = [o for o in self.orders.values()
+                 if (o["account"], o["contract"]) == key and o["state"] in ACTIVE_ORDER
+                 and o["type"] in ("StopMarket", "StopLimit") and o["action"].startswith(protective)]
+        cash = self.cash.get(pos.account)
+        pct = self.rules["risk_per_trade_pct"]
+        if not stops:
+            self.alert("tilt-check: no stop", f"{pos.side.title()} {abs(pos.qty)} {pos.contract} at {_px(pos.price)} has no "
+                       f"working stop after {self.rules['stop_grace_seconds']} s.\nYour rule: risk {pct:g}% per entry.",
+                       urgent=True)
+            return
+        risk = sum(abs(pos.price - o["stop"]) * o["qty"] * self.pv.get(pos.instrument, 1.0) for o in stops)
+        if cash and risk > pct / 100 * cash:
+            self.alert("tilt-check: check this one",
+                       f"{pos.side.title()} {abs(pos.qty)} {pos.contract}: stop risk ${risk:,.2f} = {risk / cash:.1%} of "
+                       f"the account (${cash:,.0f}).\nYour rule: {pct:g}% (${pct / 100 * cash:,.2f}).", urgent=True)
+
+    def on_snapshot(self, when: pd.Timestamp, account: str, unrealized: float, cash: float | None = None):
+        if cash:
+            self.cash[account] = cash
+            self.day_cash.setdefault((account, when.date()), cash)
         mine = [p for p in self.open.values() if p.account == account]
         if len(mine) != 1:
             return
@@ -213,6 +291,25 @@ class Watcher:
         r = self.rules
         if r["max_contracts"] and abs(pos.qty) > r["max_contracts"]:
             lines.append(f"RULE: {abs(pos.qty)} contracts, your max is {r['max_contracts']}.")
+        cls = contract_class(pos.instrument)
+        cap = (r.get("max_contracts_by_class") or {}).get(cls)
+        if cap and abs(pos.qty) > cap:
+            lines.append(f"RULE: {abs(pos.qty)} {cls} contracts, your max is {cap}.")
+        last = self._last_closed(when)
+        wait = r.get("pause_after_loss_minutes")
+        if wait and last is not None and last["profit"] <= 0:
+            mins = (when - last["exit_time"]).total_seconds() / 60
+            if mins < wait:
+                why = ""
+                if self.pause_stats:
+                    a, an, b, bn = self.pause_stats
+                    why = (f" Your re-entries within {wait:g} min of a loss: {a} trades, ${an:,.2f}. "
+                           f"After waiting: {b} trades, ${bn:,.2f}.")
+                lines.append(f"RULE: {mins:.0f} min after a losing exit, your pause is {wait:g} min.{why}")
+        limit = self._day_limit(pos.account, when)
+        if limit and pnl_today <= -limit:
+            lines.append(f"RULE: ${pnl_today:,.2f} today, past your {r['daily_loss_limit_pct']:g}% "
+                         f"daily limit (${limit:,.2f}).")
         if r["max_trades_per_day"] and n_today + 1 > r["max_trades_per_day"]:
             lines.append(f"RULE: trade #{n_today + 1} today, your max is {r['max_trades_per_day']}.")
         if r["daily_loss_limit_usd"] and pnl_today <= -r["daily_loss_limit_usd"]:
@@ -255,6 +352,10 @@ class Watcher:
                          f"({under:+.2f} pts, {held:.0f} min in).")
         if r["max_contracts"] and abs(pos.qty) > r["max_contracts"]:
             lines.append(f"RULE: now {abs(pos.qty)} contracts, your max is {r['max_contracts']}.")
+        cls = contract_class(pos.instrument)
+        cap = (r.get("max_contracts_by_class") or {}).get(cls)
+        if cap and abs(pos.qty) > cap:
+            lines.append(f"RULE: now {abs(pos.qty)} {cls} contracts, your max is {cap}.")
         if lines:
             self.alert("tilt-check: check this one", f"{pos.contract}, {abs(pos.qty)} contracts now.\n" + "\n".join(lines),
                        urgent=True)
@@ -273,10 +374,18 @@ class Watcher:
         lines = []
         if r["daily_loss_limit_usd"] and pnl_today <= -r["daily_loss_limit_usd"]:
             lines.append(f"RULE: ${pnl_today:,.2f} today. That's your ${r['daily_loss_limit_usd']:,.0f} limit.")
+        limit = self._day_limit(pos.account, when)
+        if limit and pnl_today <= -limit:
+            lines.append(f"RULE: ${pnl_today:,.2f} today. That's your {r['daily_loss_limit_pct']:g}% daily limit "
+                         f"(${limit:,.2f}).")
         if r["pause_after_losses_in_a_row"] and streak >= r["pause_after_losses_in_a_row"]:
             lines.append(f"RULE: {streak} losses in a row. Your rule says pause {r['pause_minutes']} min.")
         if r["max_trades_per_day"] and n_today >= r["max_trades_per_day"]:
             lines.append(f"RULE: that was trade #{n_today}, your max for the day.")
+        wait = r.get("pause_after_loss_minutes")
+        if wait and profit <= 0:
+            lines.append(f"Loss closed (${profit:,.2f}). Your pause: next entry after "
+                         f"{(when + pd.Timedelta(minutes=wait)):%H:%M}.")
         if lines:
             self.alert("tilt-check: rule", "\n".join(lines), urgent=True)
 
@@ -303,24 +412,41 @@ class _Tail:
         return [l.strip() for l in text.splitlines() if l.strip() and not l.startswith("time_utc")]
 
 
+def _order(w: Watcher, line: str) -> None:
+    t, acct, contract, oid, action, otype, state, qty, stop = line.split(",")[:9]
+    w.on_order(_pc(t), acct, contract, oid, action, otype, state, int(float(qty)), float(stop))
+
+
+def _snapshot(w: Watcher, line: str) -> None:
+    parts = line.split(",")
+    cash = float(parts[4]) if len(parts) > 4 and parts[4] else None
+    w.on_snapshot(_pc(parts[0]), parts[1], float(parts[2]), cash)
+
+
 def follow(w: Watcher, feed: Path, poll: float = 0.5, stop=None) -> None:
-    """Catch up on today's fills without alerts, then alert on every new fill and snapshot."""
-    fills, snaps = _Tail(feed / "fills.csv"), _Tail(feed / "snapshots.csv")
+    """Catch up on today's fills, orders and snapshots without alerts, then alert on every new one."""
+    fills, orders, snaps = _Tail(feed / "fills.csv"), _Tail(feed / "orders.csv"), _Tail(feed / "snapshots.csv")
     today = pd.Timestamp.now().normalize()
     for l in fills.lines():
         t, acct, contract, q, px = l.split(",")[:5]
         if _pc(t) >= today:
             w.on_fill(_pc(t), acct, contract, int(q), float(px), quiet=True)
-    snaps.lines()
+    for l in orders.lines():
+        _order(w, l)
+    for l in snaps.lines():
+        if _pc(l.split(",")[0]) >= today:
+            _snapshot(w, l)
     print(f"Watching {feed} (open positions: {len(w.open)}, closed today: {len(w.today)}). Ctrl+C to stop.",
           flush=True)
     while not (stop and stop()):
+        for l in orders.lines():
+            _order(w, l)
         for l in fills.lines():
             t, acct, contract, q, px = l.split(",")[:5]
             w.on_fill(_pc(t), acct, contract, int(q), float(px))
         for l in snaps.lines():
-            t, acct, upl = l.split(",")[:3]
-            w.on_snapshot(_pc(t), acct, float(upl))
+            _snapshot(w, l)
+        w.tick(pd.Timestamp.now())
         time.sleep(poll)
 
 
