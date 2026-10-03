@@ -13,8 +13,9 @@
 // the live chart line equal to the audit's no-look-ahead numbers.
 //
 // It only listens. It never places, changes or cancels an order.
-// STATUS: written against the NinjaTrader 8 API docs, not yet run inside a real NinjaTrader.
-// If it fails to compile, send the first error line; the fix is usually one type name.
+// STATUS: compiles against stand-in types (csc, C# 5) with no errors; not yet run inside a real
+// NinjaTrader 8. If NinjaTrader's compiler complains, send the first error line; the fix is
+// usually one type or member name.
 #region Using declarations
 using System;
 using System.Collections.Generic;
