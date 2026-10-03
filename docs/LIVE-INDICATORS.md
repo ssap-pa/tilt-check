@@ -24,7 +24,8 @@ Two options, in order of preference:
 ## Status (Oct 4)
 
 - Step 1 drafted: `ninjatrader/TiltCheckBars.cs` (BarsRequest per instrument listed in `Documents\tilt-check\bars-watch.txt`, closed bars appended to `Documents\tilt-check\bars\<instrument>.csv`). Not yet compiled in a real NinjaTrader.
-- Step 3 done: `Watcher._chart` + the three rule keys, `watch --bars`. Bars are loaded once at start; live re-reading of the bars folder (step 2) is next.
+- Step 2 done: `watch` (without `--bars`) re-reads `Documents\tilt-check\bars\` every 60 s and recomputes the clock offset once from history, so CHART lines follow the add-on's file as it grows.
+- Step 3 done: `Watcher._chart` + the three rule keys; `--bars` still works for a one-off export.
 
 ## Order of work
 
