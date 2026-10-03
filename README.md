@@ -152,6 +152,13 @@ ollama pull gemma4:e4b       # or gemma4:e2b on smaller GPUs
 
 Export from NinjaTrader: Control Center > Trade Performance > Trades tab > right-click > Export. English and Korean column names both work.
 
+Trading on Tradovate instead? Pass its export to `--csv` the same way, no flag needed. Either works:
+
+- **Performance** (Reports > Performance > Export CSV): one row per closed round trip, read as is.
+- **Orders** or **Fills**: one row per fill. Filled rows are paired first in, first out into round trips, and P&L is computed from the contract's dollar value per point (MNQ, NQ, MES, ES, MYM, YM, M2K, RTY, MGC, GC, MCL, CL, SIL, SI, MHG, HG). A position still open at the end of the file isn't counted.
+
+Tradovate's exports don't carry MAE/MFE, and only the fill-based ones can carry commission, so those read as 0 unless a `Commission` column is present.
+
 ## Use
 
 ```bash
