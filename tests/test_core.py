@@ -184,3 +184,26 @@ def test_watch_reads_the_add_on_files(tmp_path, monkeypatch):
     follow(w, tmp_path, poll=0, stop=stop)
     assert len(said) == 1 and said[0][1].startswith("Short 1 MNQ 12-26 at 20000")
     assert ("APEX-0014", "MNQ 12-26") in w.open
+
+
+def test_indicators_use_only_closed_bars_and_fvg_first_touch(tmp_path, monkeypatch):
+    from tiltcheck.indicators import at_entries, fvgs, resample
+    monkeypatch.setenv("TILTCHECK_TZ", "Asia/Seoul")
+    # 15-minute structure in 1-minute bars (UTC): flat at 100, a jump to 110 (leaves a gap), then drift back down
+    idx = pd.date_range("2026-09-15 00:01", periods=120, freq="1min")
+    price = [100.0] * 15 + [105.0] * 15 + [110.0] * 15 + [108.0] * 30 + [104.0] * 45
+    b = pd.DataFrame({"open": price, "high": [p + 0.5 for p in price], "low": [p - 0.5 for p in price],
+                      "close": price, "volume": 100}, index=idx)
+    g = fvgs(resample(b, 15))
+    assert (g["kind"] == "bull").any()                       # 100.5 high, then a 109.5 low two bars later
+    zone = g[g["kind"] == "bull"].iloc[0]
+    bars = {"MNQ 12-26": b}
+    # a long at 104 (inside the gap) in the first minute price is there, on the Korean clock
+    t = pd.DataFrame([dict(account="A", instrument="MNQ", contract="MNQ DEC26", side="long", qty=1,
+                           entry_time=pd.Timestamp("2026-09-15 10:16:30"), exit_time=pd.Timestamp("2026-09-15 10:20"),
+                           entry_price=104.0, exit_price=105.0, profit=1.0, commission=0.0, rows=1)])
+    ind = at_entries(t, bars, pd.Timedelta(hours=9))
+    assert ind.loc[0, "fvg"] == "bull" and zone["lo"] <= 104.0 <= zone["hi"]
+    assert bool(ind.loc[0, "fvg_first_touch"])
+    # the value used at 10:16:30 is the bar that closed at 01:16 UTC, not anything later
+    assert ind.loc[0, "price_before"] == 104.0

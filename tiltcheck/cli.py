@@ -124,6 +124,24 @@ def cmd_exits(args):
               f"your own exits ${r.actual_test:,.2f}.")
 
 
+def cmd_audit(args):
+    """Her written principles vs her own trades, using the chart as it was at each click."""
+    from .bars import align, inside, load_bars
+    from .exits import TICK
+    from .indicators import at_entries
+    from .principles import audit, flags, trades_per_day, winners_in_ticks
+    t = _history(args)
+    bars = load_bars(args.bars)
+    offset, _ = align(t, bars)
+    ok = inside(t, bars, offset)
+    tv = t[ok]
+    print(f"{len(tv)} of {len(t)} entries have bars that match their fills (clock offset {offset}).\n")
+    f = flags(tv, at_entries(tv, bars, offset), vwap_sd=args.vwap_sd)
+    print(audit(tv, f).to_string(index=False), "\n")
+    print(f"Winners in ticks (target {args.target_ticks}):\n{winners_in_ticks(t, TICK, args.target_ticks).to_string()}\n")
+    print(f"Busy days vs quiet days:\n{trades_per_day(t).to_string()}")
+
+
 def cmd_watch(args):
     from .watch import Watcher, desktop_alert, documents_dir, fills_from_history, follow, load_rules
     t = _history(args)
@@ -151,7 +169,7 @@ def cmd_learn(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="tiltcheck")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("report", "check", "learn", "exits", "watch"):
+    for name in ("report", "check", "learn", "exits", "watch", "audit"):
         p = sub.add_parser(name)
         p.add_argument("--csv")
         p.add_argument("--account", help="keep accounts ending with this (e.g. 0014)")
@@ -161,6 +179,10 @@ def main(argv=None):
         if name == "exits":
             p.add_argument("--bars", nargs="*", help="NinjaTrader minute-bar exports (files or a folder)")
             p.add_argument("--horizon", type=int, default=120, help="minutes to follow each entry")
+        if name == "audit":
+            p.add_argument("--bars", nargs="+", required=True, help="NinjaTrader minute-bar exports (files or a folder)")
+            p.add_argument("--vwap-sd", type=float, default=1.0, help="how far from VWAP counts as chasing")
+            p.add_argument("--target-ticks", type=int, default=200)
         if name == "watch":
             p.add_argument("--feed", help="folder the NinjaTrader add-on writes to (default Documents\\tilt-check)")
             p.add_argument("--rules", help="rules.json (default ~/.tilt-check/rules.json)")
@@ -171,7 +193,8 @@ def main(argv=None):
             p.add_argument("--at", help="pretend it is this time (for demos), e.g. 2026-10-02 14:05")
             p.add_argument("--decision", choices=["take", "skip", "wait"]); p.add_argument("--reason")
     a = ap.parse_args(argv)
-    {"report": cmd_report, "check": cmd_check, "learn": cmd_learn, "exits": cmd_exits, "watch": cmd_watch}[a.cmd](a)
+    {"report": cmd_report, "check": cmd_check, "learn": cmd_learn, "exits": cmd_exits, "watch": cmd_watch,
+     "audit": cmd_audit}[a.cmd](a)
 
 
 if __name__ == "__main__":
