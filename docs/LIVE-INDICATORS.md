@@ -21,6 +21,11 @@ Two options, in order of preference:
 - Use the current forming bar. If the add-on hands over a bar before it closes, the watcher ignores it.
 - Place, modify or cancel orders. Same as everything else in the tool.
 
+## Status (Oct 4)
+
+- Step 1 drafted: `ninjatrader/TiltCheckBars.cs` (BarsRequest per instrument listed in `Documents	ilt-checkars-watch.txt`, closed bars appended to `Documents	ilt-checkars\<instrument>.csv`). Not yet compiled in a real NinjaTrader.
+- Step 3 done: `Watcher._chart` + the three rule keys, `watch --bars`. Bars are loaded once at start; live re-reading of the bars folder (step 2) is next.
+
 ## Order of work
 
 1. Add-on: `BarsRequest` + append-only CSV writer (C#, ~60 lines). Test on her machine first; the add-on itself hasn't run in a real NinjaTrader 8 yet.
