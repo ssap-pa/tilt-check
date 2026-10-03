@@ -186,7 +186,9 @@ def cmd_watch(args):
             w.on_fill(when, acct, contract, int(q), float(px))
         return
     feed = Path(args.feed) if args.feed else documents_dir() / "tilt-check"
-    follow(Watcher(t, rules, bars=bars, offset=offset, alert=desktop_alert), feed)
+    # Without --bars, follow the TiltCheckBars add-on's folder if it exists (re-read every minute).
+    live_bars = None if args.bars else (feed / "bars" if (feed / "bars").exists() else None)
+    follow(Watcher(t, rules, bars=bars, offset=offset, alert=desktop_alert), feed, bars_dir=live_bars)
 
 
 def cmd_learn(args):

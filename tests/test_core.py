@@ -301,3 +301,22 @@ def test_watch_chart_line_from_closed_bars(tmp_path):
     text = out[-1]
     assert "CHART: 15m 200 EMA" in text and "against the trade" in text   # short, price above the EMA
     assert "RULE: against the 15m 200 EMA" in text
+
+
+def test_follow_reloads_bars_from_the_add_on_folder(tmp_path, monkeypatch):
+    import numpy as np
+    from tiltcheck.watch import Watcher, follow, load_rules
+    t = _load(tmp_path, KO, account="0014")
+    feed = tmp_path / "feed"; (feed / "bars").mkdir(parents=True)
+    # the add-on's bars file: UTC bar ends; the fills below are PC time (KST), align() finds +9h
+    idx = pd.date_range("2026-09-08 00:00", "2026-09-10 14:59", freq="min", tz="UTC")
+    px = 100 + np.arange(len(idx)) * 0.01
+    pd.DataFrame({"instrument": "MNQ DEC26", "bar_end_utc": idx.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                  "open": px, "high": px + 0.5, "low": px - 0.5, "close": px, "volume": 10}).to_csv(feed / "bars" / "MNQ 12-26.csv", index=False)
+    (feed / "fills.csv").write_text("time_utc,account,instrument,signed_qty,price,execution_id,platform_time\n"
+                                    f"{pd.Timestamp.utcnow().strftime('%Y-%m-%d %H:%M:%S.000')},APEX-0014,MNQ DEC26,-1,{px[-60]:.2f},x1,\n")
+    out = []
+    w = Watcher(t, {**load_rules(None), "with_15m_200": True}, alert=lambda title, text, urgent=False: out.append(text))
+    n = {"i": 0}
+    follow(w, feed, poll=0.01, stop=lambda: n.__setitem__("i", n["i"] + 1) or n["i"] > 3, bars_dir=feed / "bars")
+    assert w.bars and "MNQ 12-26" in w.bars            # loaded from the folder, not from --bars
