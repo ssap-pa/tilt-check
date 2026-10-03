@@ -160,6 +160,35 @@ def _model(t: pd.DataFrame) -> list[str]:
             f"AUC {ev.auc_tabpfn:.2f} (0.50 = coin flip). {verdict}"]
 
 
+def _highlights(t: pd.DataFrame, pause: int) -> list[str]:
+    """The three largest gaps in the record, as observations. No advice; the reader decides."""
+    cands = []
+    a, b = t[t["trades_today"] < 5], t[t["trades_today"] >= 5]
+    if len(a) >= 20 and len(b) >= 20:
+        cands.append((abs(_grp(a)[2] - _grp(b)[2]),
+                      f"Your first five entries each day made {_money(_grp(a)[2])} over {len(a)} trades; everything after them "
+                      f"made {_money(_grp(b)[2])} over {len(b)}."))
+    after = t[t["prev_win"] == 0]
+    q, s = after[after["minutes_since_exit"] < pause], after[after["minutes_since_exit"] >= pause]
+    if len(q) >= 15 and len(s) >= 15:
+        cands.append((abs(_grp(q)[2] - _grp(s)[2]),
+                      f"Re-entering within {pause} minutes of a losing exit made {_money(_grp(q)[2])} ({len(q)} trades); "
+                      f"waiting longer made {_money(_grp(s)[2])} ({len(s)} trades)."))
+    last = t["entry_time"].max()
+    rows = [(label(n, x, y, last), t[in_window(t["entry_time"], x, y)]) for n, x, y in SESSIONS]
+    rows = [(n, g) for n, g in rows if len(g) >= 15]
+    if len(rows) >= 2:
+        worst = min(rows, key=lambda r: _grp(r[1])[2]); best = max(rows, key=lambda r: _grp(r[1])[2])
+        cands.append((abs(_grp(best[1])[2] - _grp(worst[1])[2]),
+                      f"By session, {best[0]} made {_money(_grp(best[1])[2])} ({len(best[1])} trades) and {worst[0]} made "
+                      f"{_money(_grp(worst[1])[2])} ({len(worst[1])} trades)."))
+    big = t[t["size_vs_usual"] >= 3]
+    if len(big) >= 3:
+        cands.append((abs(_grp(big)[2]), f"{len(big)} entries were 3x your usual size or more; together they made {_money(_grp(big)[2])}."))
+    cands.sort(key=lambda c: -c[0])
+    return [f"{i + 1}. {txt}" for i, (_, txt) in enumerate(cands[:3])]
+
+
 def write_report(trades: pd.DataFrame, bars: dict | None = None, offset=None, pause: int = 15,
                  vwap_sd: float = 1.0, who: str = "you") -> str:
     t = add_features(trades)
@@ -196,6 +225,9 @@ def write_report(trades: pd.DataFrame, bars: dict | None = None, offset=None, pa
     L += ["", "## 6. How you exit", ""] + _exits(t, bars, offset)
     L += ["", "## 7. Your rules vs. your trades", ""] + _rules(t, bars, offset, vwap_sd)
     L += ["", "## 8. What the data can't tell you", ""] + _model(t)
+    hl = _highlights(t, pause)
+    if hl:
+        L += ["", "## 9. Three things your own numbers point at", "", "Not advice. The largest gaps in your record, in your own numbers.", ""] + hl
     L += ["", "---", "", "Made with [tilt-check](https://github.com/ssap-pa/tilt-check). Every number above comes from your export; "
           "nothing is a projection. Your files are deleted after delivery."]
     return "\n".join(L) + "\n"
