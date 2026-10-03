@@ -161,6 +161,12 @@ def cmd_audit_report(args):
         print(text)
 
 
+def cmd_three_numbers(args):
+    """Sessions, first trades, after-loss pause: the free three-number reply."""
+    from .report_md import three_numbers
+    print(three_numbers(_history(args), pause=args.pause))
+
+
 def cmd_watch(args):
     from .watch import Watcher, desktop_alert, documents_dir, fills_from_history, follow, load_rules
     t = _history(args)
@@ -188,7 +194,7 @@ def cmd_learn(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="tiltcheck")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("report", "check", "learn", "exits", "watch", "audit", "audit-report"):
+    for name in ("report", "check", "learn", "exits", "watch", "audit", "audit-report", "three-numbers"):
         p = sub.add_parser(name)
         p.add_argument("--csv")
         p.add_argument("--account", help="keep accounts ending with this (e.g. 0014)")
@@ -202,6 +208,8 @@ def main(argv=None):
             p.add_argument("--bars", nargs="+", required=True, help="NinjaTrader minute-bar exports (files or a folder)")
             p.add_argument("--vwap-sd", type=float, default=1.0, help="how far from VWAP counts as chasing")
             p.add_argument("--target-ticks", type=int, default=200)
+        if name == "three-numbers":
+            p.add_argument("--pause", type=int, default=15)
         if name == "audit-report":
             p.add_argument("--bars", nargs="*", help="NinjaTrader minute-bar exports (files or a folder); optional")
             p.add_argument("--pause", type=int, default=15, help="minutes after a loss to compare re-entries against")
@@ -218,7 +226,7 @@ def main(argv=None):
             p.add_argument("--decision", choices=["take", "skip", "wait"]); p.add_argument("--reason")
     a = ap.parse_args(argv)
     {"report": cmd_report, "check": cmd_check, "learn": cmd_learn, "exits": cmd_exits, "watch": cmd_watch,
-     "audit": cmd_audit, "audit-report": cmd_audit_report}[a.cmd](a)
+     "audit": cmd_audit, "audit-report": cmd_audit_report, "three-numbers": cmd_three_numbers}[a.cmd](a)
 
 
 if __name__ == "__main__":

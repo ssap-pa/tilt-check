@@ -189,6 +189,18 @@ def _highlights(t: pd.DataFrame, pause: int) -> list[str]:
     return [f"{i + 1}. {txt}" for i, (_, txt) in enumerate(cands[:3])]
 
 
+def three_numbers(trades: pd.DataFrame, pause: int = 15) -> str:
+    """The free teaser: sessions, first five trades, and the after-loss pause, nothing else."""
+    t = add_features(trades)
+    n, wr, net = _grp(t)
+    after, qnet, snet = _after_loss(t, pause)
+    L = [f"{n} trades, {t['day'].nunique()} days, win rate {wr:.1%}, net {_money(net)}.", "",
+         "**1. By New York session**", ""] + _sessions(t)
+    L += ["", "**2. Your first trades of the day**", ""] + _first_trades(t)
+    L += ["", "**3. After a loss**", ""] + after[4:]
+    return "\n".join(L) + "\n"
+
+
 def write_report(trades: pd.DataFrame, bars: dict | None = None, offset=None, pause: int = 15,
                  vwap_sd: float = 1.0, who: str = "you") -> str:
     t = add_features(trades)
