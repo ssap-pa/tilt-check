@@ -153,7 +153,7 @@ def cmd_audit_report(args):
         from .bars import align, load_bars
         bars = load_bars(args.bars)
         offset, _ = align(t, bars)
-    text = write_report(t, bars, offset, pause=args.pause, vwap_sd=args.vwap_sd)
+    text = write_report(t, bars, offset, pause=args.pause, vwap_sd=args.vwap_sd, who=args.for_whom or "you")
     if args.out:
         Path(args.out).write_text(text, encoding="utf-8")
         print(f"Wrote {args.out} ({len(text.splitlines())} lines).")
@@ -227,6 +227,7 @@ def main(argv=None):
             p.add_argument("--vwap-sd", type=float, default=1.0)
             p.add_argument("--out", help="write the Markdown here instead of printing")
             p.add_argument("--pdf", help="also render a PDF here (needs Chrome or Edge installed)")
+            p.add_argument("--for", dest="for_whom", help="name on the report header, e.g. --for \"J. Smith\"")
         if name == "watch":
             p.add_argument("--feed", help="folder the NinjaTrader add-on writes to (default Documents\\tilt-check)")
             p.add_argument("--rules", help="rules.json (default ~/.tilt-check/rules.json)")
