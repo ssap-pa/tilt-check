@@ -284,3 +284,20 @@ def test_load_bars_reads_multi_contract_csv(tmp_path):
     assert set(b) == {"MNQ 12-26", "MES 09-26"}          # same keys as the .txt exports
     assert b["MNQ 12-26"].index[0] == pd.Timestamp("2026-09-10 00:01:00")   # UTC, naive; align() finds the offset
     assert list(b["MNQ 12-26"].columns) == ["open", "high", "low", "close", "volume"]
+
+
+def test_watch_chart_line_from_closed_bars(tmp_path):
+    import numpy as np
+    from tiltcheck.watch import Watcher, load_rules
+    t = _load(tmp_path, KO, account="0014")
+    # three days of rising 1-minute bars, so the fill is above the 15m 200 EMA and VWAP
+    idx = pd.date_range("2026-09-08 09:00", "2026-09-10 23:59", freq="min")
+    px = 100 + np.arange(len(idx)) * 0.01
+    bars = {"MNQ 12-26": pd.DataFrame({"open": px, "high": px + 0.5, "low": px - 0.5, "close": px, "volume": 10}, index=idx)}
+    out = []
+    w = Watcher(t, {**load_rules(None), "with_15m_200": True, "fade_inside_1sd": True}, bars=bars,
+                alert=lambda title, text, urgent=False: out.append(text))
+    w.on_fill(pd.Timestamp("2026-09-10 22:00:00"), "APEX-0014", "MNQ DEC26", -1, float(px[-120]))
+    text = out[-1]
+    assert "CHART: 15m 200 EMA" in text and "against the trade" in text   # short, price above the EMA
+    assert "RULE: against the 15m 200 EMA" in text
