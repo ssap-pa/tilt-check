@@ -320,3 +320,10 @@ def test_follow_reloads_bars_from_the_add_on_folder(tmp_path, monkeypatch):
     n = {"i": 0}
     follow(w, feed, poll=0.01, stop=lambda: n.__setitem__("i", n["i"] + 1) or n["i"] > 3, bars_dir=feed / "bars")
     assert w.bars and "MNQ 12-26" in w.bars            # loaded from the folder, not from --bars
+
+
+def test_three_numbers_has_the_three_tables(tmp_path):
+    from tiltcheck.report_md import three_numbers
+    md = three_numbers(_load(tmp_path, KO, account="0014"))
+    assert md.count("**1. By New York session**") == 1 and "**2. Your first trades" in md and "**3. After a loss**" in md
+    assert "3 trades" in md and "| Within 15 minutes |" in md
