@@ -20,6 +20,8 @@ table{border-collapse:collapse;width:100%;margin:10px 0 6px}td{padding:8px 6px;b
 .btn.sec{background:transparent;color:var(--y);border:2px solid var(--y)}
 ul{padding-left:20px}li{margin:6px 0}.box{border:1px solid #333;border-radius:10px;padding:18px 20px;margin:18px 0}
 a{color:var(--y)}.small{font-size:14px;color:var(--mut)}
+.pages{display:grid;grid-template-columns:1fr;gap:12px;margin:10px 0}.pages img{width:100%;height:auto;display:block;border:1px solid #333;border-radius:6px;background:#fff}
+@media(min-width:640px){.pages{grid-template-columns:1fr 1fr}}
 </style>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"Service","name":"Your Trading History, Audited","serviceType":"Trading journal analysis report","description":"A written report from your own NinjaTrader trade export within 48 hours: sessions in New York time, first trades of the day, re-entries after a loss, size, exits, and your rules vs. your trades. Not advice.","provider":{"@type":"Person","name":"AI SSAPABLE"},"areaServed":"Worldwide","offers":{"@type":"Offer","price":"149","priceCurrency":"USD","url":"https://payhip.com/order?link=BzSRC","availability":"https://schema.org/InStock"},"url":"https://ssap-pa.github.io/tilt-check/"}
@@ -33,7 +35,8 @@ a{color:var(--y)}.small{font-size:14px;color:var(--mut)}
 <p class="small">Late means a full refund. Your files are deleted after delivery. The $149 plan is sold through my Payhip store and also includes my 151-page ebook on running a one-person business with AI agents.</p>
 
 <h2>From the sample report</h2>
-<p><img src="sample-report.gif" alt="The four pages of the sample report" style="width:100%;max-width:520px;border:1px solid #333;border-radius:8px"></p>
+<div class="pages"><a href="https://github.com/ssap-pa/tilt-check/blob/main/docs/sample-report.pdf"><img src="report-p1.png" width="765" height="990" loading="lazy" alt="Page 1: the month on one page, and when you trade in New York time"></a><a href="https://github.com/ssap-pa/tilt-check/blob/main/docs/sample-report.pdf"><img src="report-p2.png" width="765" height="990" loading="lazy" alt="Page 2: first trades of the day, re-entries after a loss, size"></a><a href="https://github.com/ssap-pa/tilt-check/blob/main/docs/sample-report.pdf"><img src="report-p3.png" width="765" height="990" loading="lazy" alt="Page 3: how you exit, replayed on her own minute bars, and her written rules"></a><a href="https://github.com/ssap-pa/tilt-check/blob/main/docs/sample-report.pdf"><img src="report-p4.png" width="765" height="990" loading="lazy" alt="Page 4: rules vs. trades, what the data can't tell, three things to act on"></a></div>
+<p class="small">The first four pages, as delivered. Tap a page to open the full PDF.</p>
 <p class="mut">One real prop-firm account, September 2026, shared with the trader's permission. 293 trades, +$1,832.87 net, replayed on her own NinjaTrader minute bars.</p>
 <table>
 <tr><td>Entries 1-5 each day (92 trades)</td><td class="neg">-$327.38</td></tr>
