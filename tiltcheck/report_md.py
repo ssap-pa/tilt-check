@@ -189,6 +189,38 @@ def _highlights(t: pd.DataFrame, pause: int) -> list[str]:
     return [f"{i + 1}. {txt}" for i, (_, txt) in enumerate(cands[:3])]
 
 
+PDF_CSS = """@page{size:Letter;margin:0.8in 0.85in}
+body{font-family:Georgia,'Times New Roman',serif;font-size:11pt;line-height:1.55;color:#111}
+h1{font-family:Arial,sans-serif;font-size:24pt;line-height:1.15;margin:0 0 4pt}
+h2{font-family:Arial,sans-serif;font-size:14pt;margin:20pt 0 6pt;border-bottom:3px solid #FFE600;padding-bottom:2pt}
+table{border-collapse:collapse;width:100%;font-size:9.5pt;margin:6pt 0 10pt;page-break-inside:avoid}
+th,td{border:1px solid #999;padding:3pt 6pt;vertical-align:top;text-align:left}th{background:#f4f4f4}
+hr{border:0;border-top:1px solid #ccc;margin:16pt 0}"""
+
+BROWSERS = [r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"]
+
+
+def to_pdf(markdown_text: str, out_pdf) -> None:
+    """Render the report with a headless Chrome/Edge (no extra Python deps beyond `markdown`)."""
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    import markdown
+    browser = next((b for b in BROWSERS if Path(b).exists()), None)
+    if not browser:
+        raise RuntimeError("no Chrome or Edge found for PDF rendering")
+    html = (f'<!doctype html><html><head><meta charset="utf-8"><title>Your Trading History, Audited</title>'
+            f'<style>{PDF_CSS}</style></head><body>{markdown.markdown(markdown_text, extensions=["tables"])}</body></html>')
+    with tempfile.TemporaryDirectory() as d:
+        src = Path(d) / "report.html"
+        src.write_text(html, encoding="utf-8")
+        subprocess.run([browser, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
+                        f"--print-to-pdf={Path(out_pdf).resolve()}", src.as_uri()], check=True, timeout=180)
+
+
 def three_numbers(trades: pd.DataFrame, pause: int = 15) -> str:
     """The free teaser: sessions, first five trades, and the after-loss pause, nothing else."""
     t = add_features(trades)

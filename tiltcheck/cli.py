@@ -159,6 +159,10 @@ def cmd_audit_report(args):
         print(f"Wrote {args.out} ({len(text.splitlines())} lines).")
     else:
         print(text)
+    if args.pdf:
+        from .report_md import to_pdf
+        to_pdf(text, args.pdf)
+        print(f"Wrote {args.pdf}.")
 
 
 def cmd_three_numbers(args):
@@ -222,6 +226,7 @@ def main(argv=None):
             p.add_argument("--pause", type=int, default=15, help="minutes after a loss to compare re-entries against")
             p.add_argument("--vwap-sd", type=float, default=1.0)
             p.add_argument("--out", help="write the Markdown here instead of printing")
+            p.add_argument("--pdf", help="also render a PDF here (needs Chrome or Edge installed)")
         if name == "watch":
             p.add_argument("--feed", help="folder the NinjaTrader add-on writes to (default Documents\\tilt-check)")
             p.add_argument("--rules", help="rules.json (default ~/.tilt-check/rules.json)")
