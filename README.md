@@ -141,6 +141,7 @@ Sections: the period on one page, sessions in New York time, first trades of the
 ![The four pages of the sample report](docs/sample-report.gif)
 
 Five-minute video version of that report: https://youtu.be/8LZYHxkD3Ew
+- Watch mode, with October 1 replayed through it (3:47): https://youtu.be/eG1ArdgQXfY
 
 ## Install
 
