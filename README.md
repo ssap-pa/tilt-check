@@ -140,6 +140,8 @@ Sections: the period on one page, sessions in New York time, first trades of the
 
 ![The four pages of the sample report](docs/sample-report.gif)
 
+Five-minute video version of that report: https://youtu.be/IBplFKQXP4c
+
 ## Install
 
 한국어 설치 안내: [docs/INSTALL-ko.md](docs/INSTALL-ko.md)
