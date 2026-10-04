@@ -140,7 +140,7 @@ Sections: the period on one page, sessions in New York time, first trades of the
 
 ![The four pages of the sample report](docs/sample-report.gif)
 
-Five-minute video version of that report: https://youtu.be/mWhza-rHtPo
+Five-minute video version of that report: https://youtu.be/emc4VJpMckQ
 
 ## Install
 
