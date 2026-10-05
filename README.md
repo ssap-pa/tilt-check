@@ -134,6 +134,7 @@ Everything above, as one Markdown document from one export:
 ```
 python -m tiltcheck audit-report --csv trades.csv --bars "MNQ 12-26.Last.txt" --out report.md --pdf report.pdf [--for "J. Smith"]
 python -m tiltcheck three-numbers --csv trades.csv      # sessions, first trades, after-loss pause only
+python -m tiltcheck three-numbers --csv trades.csv --pdf three.pdf   # same, plus a one-page PDF
 ```
 
 Sections: the period on one page, sessions in New York time, first trades of the day, after a loss (and what re-entering within 15 minutes cost), size, how you exit (with the bracket replay when bars are given), your rules vs. your trades, and what the data can't tell you. Without `--bars` the replay and the chart rules say they need bars and the rest still runs. A rendered example from one real account is in [docs/sample-report.pdf](docs/sample-report.pdf):

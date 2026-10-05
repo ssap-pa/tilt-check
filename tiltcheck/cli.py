@@ -167,8 +167,12 @@ def cmd_audit_report(args):
 
 def cmd_three_numbers(args):
     """Sessions, first trades, after-loss pause: the free three-number reply."""
-    from .report_md import three_numbers
-    print(three_numbers(_history(args), pause=args.pause))
+    from .report_md import three_numbers, three_numbers_page, to_pdf
+    t = _history(args)
+    print(three_numbers(t, pause=args.pause))
+    if args.pdf:
+        to_pdf(three_numbers_page(t, pause=args.pause), args.pdf, title="Your three numbers")
+        print(f"Wrote {args.pdf}.")
 
 
 def cmd_watch(args):
@@ -225,6 +229,7 @@ def main(argv=None):
             p.add_argument("--target-ticks", type=int, default=200)
         if name == "three-numbers":
             p.add_argument("--pause", type=int, default=15)
+            p.add_argument("--pdf", help="also render a one-page PDF here (needs Chrome or Edge installed)")
         if name == "audit-report":
             p.add_argument("--bars", nargs="*", help="NinjaTrader minute-bar exports (files or a folder); optional")
             p.add_argument("--pause", type=int, default=15, help="minutes after a loss to compare re-entries against")

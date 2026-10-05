@@ -329,6 +329,14 @@ def test_three_numbers_has_the_three_tables(tmp_path):
     assert "3 trades" in md and "| Within 15 minutes |" in md
 
 
+def test_three_numbers_page_wraps_the_tables(tmp_path):
+    from tiltcheck.report_md import FULL_REPORT_URL, three_numbers, three_numbers_page
+    t = _load(tmp_path, KO, account="0014")
+    page = three_numbers_page(t)
+    assert page.startswith("# Your three numbers\n\nSep 1 to Sep 1, 2026,")
+    assert three_numbers(t) in page and page.rstrip().endswith(FULL_REPORT_URL)
+
+
 def test_day_block_resample_share():
     import datetime as dt
     from tiltcheck.exits import bracket_vs_exits_share
