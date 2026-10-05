@@ -515,15 +515,27 @@ def follow(w: Watcher, feed: Path, poll: float = 0.5, stop=None, bars_dir: Path 
     """Catch up on today's fills, orders and snapshots without alerts, then alert on every new one.
     With `bars_dir` (the TiltCheckBars add-on's folder), bars are re-read every `bars_every` seconds."""
     fills, orders, snaps = _Tail(feed / "fills.csv"), _Tail(feed / "orders.csv"), _Tail(feed / "snapshots.csv")
+    seen_exec: set[str] = set()                      # execution ids already applied; a re-sent fill is dropped
+
+    def fill_fields(line: str):
+        """(when, account, contract, qty, price) for a fills.csv line, or None if its execution id was seen."""
+        parts = line.split(",")
+        t, acct, contract, q, px = parts[:5]
+        xid = parts[5].strip() if len(parts) > 5 else ""
+        if xid:
+            if xid in seen_exec:
+                return None
+            seen_exec.add(xid)
+        return _pc(t), acct, contract, int(q), float(px)
     last_bars = 0.0
     if bars_dir is not None:
         _reload_bars(w, bars_dir)
         last_bars = time.monotonic()
     today = pd.Timestamp.now().normalize()
     for l in fills.lines():
-        t, acct, contract, q, px = l.split(",")[:5]
-        if _pc(t) >= today:
-            w.on_fill(_pc(t), acct, contract, int(q), float(px), quiet=True)
+        f = fill_fields(l)
+        if f is not None and f[0] >= today:
+            w.on_fill(*f, quiet=True)
     for l in orders.lines():
         _order(w, l)
     for l in snaps.lines():
@@ -535,8 +547,9 @@ def follow(w: Watcher, feed: Path, poll: float = 0.5, stop=None, bars_dir: Path 
         for l in orders.lines():
             _order(w, l)
         for l in fills.lines():
-            t, acct, contract, q, px = l.split(",")[:5]
-            w.on_fill(_pc(t), acct, contract, int(q), float(px))
+            f = fill_fields(l)
+            if f is not None:
+                w.on_fill(*f)
         for l in snaps.lines():
             _snapshot(w, l)
         w.tick(pd.Timestamp.now())

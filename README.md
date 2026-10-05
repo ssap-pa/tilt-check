@@ -76,7 +76,7 @@ Typing the trade before every click is friction, and the moments that matter are
 - **past her usual loss**: an open trade losing more than her median losing trade for that setup
 - at every entry, her usual winner and loser for that setup, as prices. They're her own medians, not a prediction.
 
-The add-on only listens. It never places, changes or cancels an order. Her prop firm bans fully automated trading anyway; brackets she sets herself in an ATM template are fine.
+The add-on only listens. It never places, changes or cancels an order. If NinjaTrader re-sends an execution after a reconnect, `watch` drops the duplicate by its execution id, so the position it tracks doesn't double. Her prop firm bans fully automated trading anyway; brackets she sets herself in an ATM template are fine.
 
 Replaying one of her real days through it (`watch --replay-day 2026-10-01`), two of the alerts it would have raised:
 

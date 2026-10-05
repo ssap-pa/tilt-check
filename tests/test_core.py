@@ -186,6 +186,30 @@ def test_watch_reads_the_add_on_files(tmp_path, monkeypatch):
     assert ("APEX-0014", "MNQ 12-26") in w.open
 
 
+def test_watch_drops_a_resent_execution(tmp_path, monkeypatch):
+    """After a reconnect NinjaTrader can raise the same execution again; the position must not double."""
+    from tiltcheck.watch import follow
+    monkeypatch.setenv("TILTCHECK_TZ", "Asia/Seoul")
+    w, said = _watcher()
+    (tmp_path / "fills.csv").write_text("time_utc,account,instrument,signed_qty,price,execution_id,platform_time\n",
+                                        encoding="utf-8")
+    ticks = iter(range(4))
+
+    def stop():
+        n = next(ticks, None)
+        with open(tmp_path / "fills.csv", "a", encoding="utf-8") as f:
+            if n == 1:
+                f.write("2026-10-06 03:30:00.000,APEX-0014,MNQ 12-26,-1,20000,x1,2026-10-06 12:30:00.000\n")
+            if n == 2:   # the same execution, re-sent
+                f.write("2026-10-06 03:30:00.000,APEX-0014,MNQ 12-26,-1,20000,x1,2026-10-06 12:30:00.000\n"
+                        "2026-10-06 03:31:00.000,APEX-0014,MNQ 12-26,-1,20001,x2,2026-10-06 12:31:00.000\n")
+        return n is None
+    follow(w, tmp_path, poll=0, stop=stop)
+    pos = w.open[("APEX-0014", "MNQ 12-26")]
+    assert pos.qty == -2                      # x1 once, x2 once; the duplicate x1 was dropped
+    assert sum(1 for s in said if s[1].startswith("Short 1 MNQ 12-26 at 20000")) == 1
+
+
 def test_indicators_use_only_closed_bars_and_fvg_first_touch(tmp_path, monkeypatch):
     from tiltcheck.indicators import at_entries, fvgs, resample
     monkeypatch.setenv("TILTCHECK_TZ", "Asia/Seoul")
