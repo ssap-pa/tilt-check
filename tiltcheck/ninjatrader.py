@@ -34,9 +34,9 @@ LONG = {"Long", "매수"}
 
 
 def _money(s: pd.Series) -> pd.Series:
-    """'$59.46', '-$194.16', '($194.16)', '1,234.50' -> float."""
+    """'$59.46', '-$194.16', '($194.16)', '$(194.16)', '1,234.50' -> float."""
     t = s.astype(str).str.strip()
-    neg = t.str.startswith("-") | t.str.startswith("(")
+    neg = t.str.match(r"^\$?[-(]")
     v = pd.to_numeric(t.str.replace(r"[^0-9.]", "", regex=True), errors="coerce").fillna(0.0)
     return v.where(~neg, -v)
 
@@ -69,7 +69,10 @@ def load_trades(path: str | Path, account: str | None = None) -> pd.DataFrame:
     df = raw.rename(columns=rename)
     missing = {"instrument", "market_pos", "qty", "entry_time", "exit_time", "profit"} - set(df.columns)
     if missing:
-        raise ValueError(f"not a NinjaTrader Trades export, missing: {sorted(missing)}")
+        from .tradovate import is_tradovate, load_tradovate
+        if is_tradovate(path):
+            return load_tradovate(path, account)
+        raise ValueError(f"not a NinjaTrader Trades or Tradovate export, missing: {sorted(missing)}")
     if account:
         df = df[df["account"].astype(str).str.endswith(account)]
     out = pd.DataFrame({

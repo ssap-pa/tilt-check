@@ -5,3 +5,4 @@ __pycache__/
 *.csv
 !sample/trades_sample.csv
 .tilt-check/
+!tests/fixtures/*.csv
