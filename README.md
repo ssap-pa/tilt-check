@@ -132,7 +132,7 @@ So the check doesn't print a take-profit number. The replay is there to look at.
 Everything above, as one Markdown document from one export:
 
 ```
-python -m tiltcheck audit-report --csv trades.csv --bars "MNQ 12-26.Last.txt" --out report.md --pdf report.pdf [--for "J. Smith"]
+python -m tiltcheck audit-report --csv trades.csv --bars "MNQ 12-26.Last.txt" --out report.md --pdf report.pdf [--for "J. Smith"] [--rules rules.json]
 python -m tiltcheck three-numbers --csv trades.csv      # sessions, first trades, after-loss pause only
 python -m tiltcheck three-numbers --csv trades.csv --pdf three.pdf   # same, plus a one-page PDF
 ```

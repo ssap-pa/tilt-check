@@ -347,3 +347,19 @@ def test_day_block_resample_share():
     s = bracket_vs_exits_share(mixed, days, n=400)
     assert 0.2 < s < 0.8                      # pure noise lands near a coin flip
     assert bracket_vs_exits_share([1.0], [dt.date(2026, 9, 1)]) != bracket_vs_exits_share([1.0], [dt.date(2026, 9, 1)])  # NaN with < 5 days
+
+
+def test_rules_you_sent_against_the_trades(tmp_path):
+    from tiltcheck.report_md import _rules_you_sent, rule_flags
+    from tiltcheck.watch import DEFAULT_RULES
+    t = add_features(_load(tmp_path, KO, account="0014"))
+    rules = dict(DEFAULT_RULES, max_trades_per_day=2, pause_after_loss_minutes=15,
+                 max_contracts_by_class={"micro": 2, "mini": None})
+    f = rule_flags(t, rules)
+    # 22:00 and 22:03 are trades 1-2; the 22:30 entry (3 contracts, 10 min after a losing exit) breaks all three
+    assert list(f["at most 2 trades a day"]) == [True, True, False]
+    assert list(f["wait 15 min after a losing exit"]) == [False]          # only the entry after a loss counts
+    assert list(f["at most 2 micro contracts per entry"]) == [True, True, False]
+    md = "\n".join(_rules_you_sent(t, rules))
+    assert "| at most 2 trades a day | no | 1 | 100.0% | +$42.00 (small sample) |" in md
+    assert _rules_you_sent(t, DEFAULT_RULES) == []                         # nothing set, no section
