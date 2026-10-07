@@ -119,11 +119,12 @@ The other part is "where should a trade like this be closed", and that needs to 
 python -m tiltcheck exits --csv trades.csv --bars "MNQ 09-26.Last.txt" "MNQ 12-26.Last.txt"
 ```
 
-On her account, with public 1-minute futures bars (Yahoo Finance) until her own NinjaTrader export comes in: the bars start September 3, so 233 of her 293 entries are covered, and every one of those fills sits inside the bar it happened in.
+On her account, with her own NinjaTrader 1-minute bars (all 293 entries covered; every fill sits inside the bar it happened in, clock offset +9h):
 
-- Picked on her older 163 trades, the best bracket was the widest one tried: target and stop at 3x her usual move (MNQ +26.25/-26.25). On those same trades it made $985.27 to her $645.27. That's what fitting does.
-- On her newer 70 trades, which it hadn't seen, it **lost $75.54. Her own exits made +$176.46.** Same answer whichever way the both-levels-in-one-bar case is counted.
-- On her older trades, a stop at half her usual move (4.5 points on MNQ) lost money with every target. In the 30 minutes after an MNQ entry, price typically went 18.75 points her way and 23.25 against (medians), so that stop sits well inside the normal swing.
+- Picked on her older 205 trades, the best bracket was the widest one tried: target and stop at 3x her usual move (MNQ +26.25/-26.25). On those same trades it made $2,447.01 to her $1,561.51. That's what fitting does.
+- On her newer 88 trades, which it hadn't seen, it made **+$444.86. Her own exits made +$271.36.** Resampling those trades by day 1,000 times, the bracket was ahead in 66% of resamples: better than a coin flip, not by much.
+- With public bars (Yahoo Finance) the same test had said the opposite: 233 of 293 entries covered, and on that 70-trade holdout the bracket lost $75.54 to her +$176.46. A reader asked whether that was the bars or the trades. On the 70 holdout trades both bar sets cover, the two give the identical result (-$75.54, 0 of 70 trades differ); the whole flip is the 18 newest trades the public feed never had. Coverage, not bar quality, moved the answer.
+- In the 30 minutes after an MNQ entry, price typically went 22.75 points her way and 20.5 against (medians, 229 entries), so a stop at half her usual move sits well inside the normal swing.
 
 So the check doesn't print a take-profit number. The replay is there to look at.
 
